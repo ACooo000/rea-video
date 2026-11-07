@@ -130,6 +130,45 @@ def test_sfx_alignment():
     assert res["events_with_sfx"]["sticker_out"] == {"with_sfx": 0, "total": 1}
 
 
+def _sub(i, t0, t1, text, lane=2):
+    return {"id": f"text_{i:03d}", "kind": "subtitle", "kind_zh": "字幕", "text": text, "t0": t0, "t1": t1, "lane": lane}
+
+
+def test_speech_anchors_and_persistent_layers():
+    lines = [_sub(1, 0.0, 1.8, "这俩口红有啥区别"), _sub(2, 1.8, 3.8, "现在双11全场五折"), _sub(3, 4.0, 5.5, "给你安排上"),
+             _sub(4, 6.0, 7.0, "错过就没有了")]
+    filing = [_sub(10 + k, t, t + 1.5, "粤G妆网备字2026", lane=6) for k, t in enumerate((0.0, 3.0, 6.0))]  # one text repeated
+    cues = lines + filing + [
+        {"id": "text_020", "kind": "huazi", "kind_zh": "花字", "text": "五折", "t0": 3.2, "t1": 3.6},       # repeats a word of line 2
+        {"id": "text_021", "kind": "huazi", "kind_zh": "花字", "text": "冲！", "t0": 5.7, "t1": 6.2},        # just after line 3
+        {"id": "text_022", "kind": "label", "kind_zh": "文字标注", "text": "8uXrH", "t0": 2.0, "t1": 2.3},   # picture text: no shared word
+        {"id": "text_023", "kind": "label", "kind_zh": "文字标注", "text": "使用效果因人而异", "t0": 0.0, "t1": 7.0},  # disclaimer across cuts
+        {"id": "text_024", "kind": "label", "kind_zh": "文字标注", "text": "Q8xZ", "t0": 1.0, "t1": 6.5}]       # noise seen once
+    stickers = [{"id": "sticker_01", "kind": "static_sticker", "kind_zh": "静态贴纸", "t0": 4.1, "t1": 4.9, "confidence": "medium"}]
+    cuts = [2.0, 4.0, 6.0]
+    assert [c["id"] for c in P.speech_lines(cues)] == ["text_001", "text_002", "text_003", "text_004"]
+    P.anchor_layers(cues, stickers, cuts)
+    by = {c["id"]: c for c in cues}
+    assert by["text_020"]["anchor"]["line"] == "text_002" and by["text_020"]["anchor"]["word"] == "五折"
+    assert by["text_021"]["anchor"] == {"line": "text_003", "text": "给你安排上", "rel": "after", "dt": 0.2, "word": None}
+    assert stickers[0]["anchor"]["line"] == "text_003" and stickers[0]["anchor"]["rel"] == "during"
+    assert "anchor" not in by["text_022"] and "anchor" not in by["text_023"]
+    assert by["text_023"]["persistent"] == {"cuts": 3} and "persistent" not in by["text_024"]
+    lines_out = P.summary_lines({"text_cues": [c for c in cues if c["kind"] != "subtitle"], "stickers": stickers})
+    assert any("按台词定位 3 处" in l for l in lines_out)
+    assert any(l.startswith("常驻图层 1 个") and "使用效果因人而异" in l for l in lines_out)
+    P.anchor_layers(cues, [], [])  # a re-run drops stale marks
+    assert not any(c.get("persistent") for c in cues)
+
+
+def test_overlays_at_skips_picture_text():
+    pack = {"text_cues": [{"kind": "subtitle", "kind_zh": "字幕", "t0": 0.0, "t1": 2.0},
+                          {"kind": "label", "kind_zh": "文字标注", "t0": 0.0, "t1": 2.0, "part_of_picture": True}],
+            "stickers": [{"t0": 1.0, "t1": 3.0, "confidence": "low"}]}
+    assert P.overlays_at(pack, 0.0, 0.15) == ["字幕"]
+    assert P.overlays_at(pack, 2.5, 2.6) == [] and P.overlays_at(None, 0, 1) == []
+
+
 def test_ass_export():
     cues = [{"kind": "subtitle", "text": "a/b", "t0": 1.0, "t1": 2.5, "bbox": [0.2, 0.8, 0.6, 0.08], "line_h": 0.035, "angle": 0.0,
              "style": {"fill": "#ffffff", "stroke": "#000000", "stroke_ratio": 0.05}, "anim_in": {"kind": "pop"}},
@@ -137,6 +176,12 @@ def test_ass_export():
     ass = P.to_ass(cues, 1080, 1920)
     assert "Dialogue: 0,0:00:01.00,0:00:02.50" in ass and "a\\Nb" in ass and "\\fscx60" in ass
     assert ass.count("Dialogue:") == 1  # scene text is not exported
+    side = [{"kind": "label", "text": "效果因人而异", "t0": 0, "t1": 3, "bbox": [0.01, 0.8, 0.026, 0.08], "line_h": 0.08, "angle": 0.0, "style": {}},
+            {"kind": "huazi", "text": "双十一福利五折", "t0": 0, "t1": 3, "bbox": [0.3, 0.5, 0.4, 0.05], "line_h": 0.08, "angle": 0.0, "style": {}}]
+    ass = P.to_ass(side, 720, 1280)
+    assert "效\\N果\\N因" in ass  # a narrow tall box is vertical text
+    sizes = [int(l.split(",")[2]) for l in ass.splitlines() if l.startswith("Style:")]
+    assert sizes[0] <= 19 and sizes[1] * 7 <= 0.4 * 720 * 1.06  # each fits its measured box
 
 
 def test_clean_region():

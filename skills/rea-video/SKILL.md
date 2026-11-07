@@ -72,6 +72,7 @@ rea-video summary out/ref/breakdown.json      # 用并入后的结果写回复
    - 贴纸：标了「需要看图确认」的，看 `packaging/sticker_XX.jpg` 和 `review_tasks.json` 里的 `frame_cmd`，在 `review_answers.json` 的 `packaging.stickers` 里填 `is_overlay` 和 `what`；工具漏掉的写进 `packaging.missed`。3D / 动画 / 版式画面里突然出现的物体工具不算贴纸，你看到是后期贴的再补。
    - 花字和标签分错类时在 `packaging.text` 里改 `kind`。
    - 音效「对应画面」一列是按时间就近对齐的，没开 VLM 时补出的候选（来源 `deterministic_anchored`）实测只有约四成是真音效，写成"可能"。
+   - 「按台词定位」是花字 / 标题 / 贴纸落在哪句字幕上（句中第几秒、对上哪个词），「常驻图层」是跨切镜不变的免责声明、标题栏、角标。只在有字幕时才有；定位按时间推的，看图觉得不对就在回复里说明。
 8. 第 3、5、6、7 步改了 `review_answers.json` 的，改完**再跑一次** `rea-video apply-review out/ref --by <你的名字>`，否则这些修改进不了报告。
 9. 如果你的判断和工具不同，以你的复核为准，在回复里写明理由；有价值的话，建议用户把这条视频加进评测集（仓库 `docs/dev/evaluation.md`）。
 

@@ -417,6 +417,13 @@ def production_plan(b: dict, out: Path, engine: str = "seedance2.0") -> dict:
         if lim["native_audio"]:
             plan["audio_note"] = T("模型可以同时生成动作音效和环境声", "the model can generate action sound effects and ambience along with the picture") + \
                 (semi() + T("口播建议单独 TTS 再混进去，方便改文案和卡时间", "voice-over is better done as separate TTS and mixed in, so copy and timing stay editable") if voice else "")
+        from .packaging import overlays_at
+
+        on_gen = list(dict.fromkeys(k for u in units for a, z in u["ranges"] for k in overlays_at(b.get("packaging"), a, z)))
+        if on_gen:  # generated picture stays clean; the packaging is laid on afterwards, so a new wording can move it
+            plan["overlay_note"] = T("生成单元镜头上的{k}属于后期包装，不写进提示词；参考帧上带着的先擦掉，生成后按「剪辑包装层」的时间轴叠回（assemble --overlays）",
+                                     "the {k} on the generated shots is post-production packaging: keep it out of the prompts, erase it from reference frames, "
+                                     "and lay it back on from the packaging timeline after generation (assemble --overlays)", k=join(on_gen))
     plan["shoot"] = _setups(shots, sig, thr, b)
     code, cur = [], []
     for r in shots + [None]:
@@ -516,6 +523,8 @@ def report_md(plan: dict) -> list[str]:
                 mx=lim["max"], p=plan["rules"]["hardcut_s"]["prefer"], m=plan["rules"]["hardcut_s"]["max"])]
         if plan.get("audio_note"):
             L.append(T("- 声音：{a}", "- Audio: {a}", a=plan["audio_note"]))
+        if plan.get("overlay_note"):
+            L.append(T("- 包装层：{a}", "- Packaging: {a}", a=plan["overlay_note"]))
         L += ["", T("### 生成单元", "### Generation units"), "",
               T("| 单元 | 镜头 | 时间 | 时长 | 方式 | 衔接 |", "| Unit | Shots | Time | Duration | Mode | Continuity |"), "|---|---|---|---|---|---|"]
         mode_zh = LangDict({"multi_shot": "一次多镜头", "single": "单镜", "split": "超长切段"},

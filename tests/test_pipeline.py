@@ -9,7 +9,7 @@ from rea_video.classify import LABELS, deterministic, fuse, top
 from rea_video.integrations.capsule_cinema import build_remake_jobs, export_capsule_analysis
 from rea_video.media import video_info
 from rea_video.pipeline import decompose, finalize
-from rea_video.remake import assemble
+from rea_video.remake import assemble, overlay_cues, replaced_spans
 from rea_video.shots import build_track, detect_shots
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,10 +98,28 @@ def test_remake_jobs_and_assemble(breakdown, tmp_path):
     assert execs == ["local_ffmpeg", "local_ffmpeg", "keep_original"], execs
     results = jobs_path.with_name("results.json")
     results.write_text(json.dumps({"results": {}}))
-    res = json.loads(assemble(out / "breakdown.json", results))
+    res = json.loads(assemble(out / "breakdown.json", results, overlays=True))
     assert Path(res["remake"]).is_file() and Path(res["compare"]).is_file()
+    assert res["overlays"]["text"] == 0  # OCR off in this fixture: nothing to lay on, and nothing breaks
     info = video_info(res["remake"])
     assert abs(info.duration - b["source"]["duration"]) < 0.2
+
+
+def test_overlays_follow_replaced_shots_only():
+    b = {"shots": [{"index": 1, "start": 0.0, "end": 2.0}, {"index": 2, "start": 2.0, "end": 5.0}, {"index": 3, "start": 5.0, "end": 6.0}],
+         "packaging": {"text_cues": [
+             {"kind": "subtitle", "text": "跨两镜", "t0": 1.0, "t1": 3.0, "anim_in": {"kind": "pop"}},
+             {"kind": "huazi", "text": "WOW", "t0": 2.5, "t1": 3.5, "anim_in": {"kind": "pop"}},
+             {"kind": "label", "text": "界面字", "t0": 2.5, "t1": 3.0, "part_of_picture": True},
+             {"kind": "subtitle", "text": "原片里", "t0": 5.2, "t1": 5.8}],
+             "stickers": [{"id": "sticker_01", "t0": 3.0, "t1": 4.0, "confidence": "medium"}]}}
+    spans = replaced_spans(b, [(1, "original"), (2, "generated"), (3, "original")])
+    assert spans == [(2.0, 5.0)]
+    cues, stickers = overlay_cues(b, spans)
+    assert [(c["text"], c["t0"], c["t1"]) for c in cues] == [("跨两镜", 2.0, 3.0), ("WOW", 2.5, 3.5)]
+    assert cues[0]["anim_in"] is None and cues[1]["anim_in"] == {"kind": "pop"}  # a clipped line does not pop in again
+    assert [s["id"] for s in stickers] == ["sticker_01"]
+    assert replaced_spans(b, [(1, "generated"), (2, "local_still"), (3, "original")]) == [(0.0, 5.0)]
 
 
 def test_english_report_has_no_chinese(media, tmp_path):

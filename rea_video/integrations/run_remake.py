@@ -72,6 +72,8 @@ def main() -> None:
             p = dict(j["params"])
             p["prompt"] = p["prompt"][:120] + ("…" if len(p["prompt"]) > 120 else "")
             print(json.dumps({"shot": j["shot"], "label": j["label"], **p}, ensure_ascii=False))
+            if j.get("warning"):
+                print(f"  ! {j['warning']}")
         return
 
     sys.path.insert(0, str(root / "lib"))

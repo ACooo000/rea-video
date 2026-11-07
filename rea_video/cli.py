@@ -219,7 +219,7 @@ def cmd_capsule_draft(args) -> int:
 def cmd_assemble(args) -> int:
     from .remake import assemble
 
-    print(assemble(Path(args.breakdown), Path(args.results), Path(args.out) if args.out else None))
+    print(assemble(Path(args.breakdown), Path(args.results), Path(args.out) if args.out else None, overlays=args.overlays))
     return 0
 
 
@@ -477,6 +477,8 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("breakdown")
     a.add_argument("results", help="remake-run 输出的 results.json（或自己写的同格式文件）")
     a.add_argument("-o", "--out")
+    a.add_argument("--overlays", action="store_true",
+                   help="把测得的字幕 / 花字 / 标题按原样式叠回换掉的镜头（保留原片的镜头本来就有）；贴纸只列出来，要自己找素材")
     a.set_defaults(func=cmd_assemble)
 
     t = sub.add_parser("tiles", help="按时间抽帧拼图，近距离检查某一段（agent 复核用）")

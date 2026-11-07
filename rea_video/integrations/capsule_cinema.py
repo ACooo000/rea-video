@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 
 from ..classify import LABEL_ZH
+from ..i18n import T, join, semi
+from ..packaging import overlays_at
 from ..util import fmt_time, write_json
 
 FORMAT_MAP = {"口播": "short_video", "剧情": "story", "商品展示": "product_showcase", "知识讲解": "explainer",
@@ -250,11 +252,21 @@ def build_remake_jobs(b: dict, bdir: Path, capsule_root: Path, engine: str | Non
             params.update({"start_image_path": first, "end_image_path": last})
         elif gen_type == "image_to_video":
             params["image_path"] = first
+        warn = ["原镜头是真实素材：生成结果只是近似，建议换成你自己的素材"] if rep.get("user_assets") else []
+        # the first / last frames go to the model as-is: subtitles or stickers burned into them get copied into the clip
+        used = [(sh["start"], sh["start"] + 0.15)] + ([(sh["end"] - 0.15, sh["end"])] if gen_type == "first_last_frame" else [])
+        layers = list(dict.fromkeys(k for a, z in used for k in overlays_at(b.get("packaging"), a, z)))
+        if layers:
+            warn.append(T("参考帧上带着原片的{k}：直接给模型，生成画面多半会带上这些字；先擦掉（剪映去字幕 / 图像模型擦除）再生成，"
+                          "包装层最后用 assemble --overlays 叠回",
+                          "the reference frames carry the source's {k}: handed to the model as-is, the clip will likely copy them; "
+                          "erase them first (subtitle removal / image inpainting), then lay the packaging back on with assemble --overlays",
+                          k=join(layers)))
         jobs.append({"shot": sh["index"], "id": sh["id"], "executor": "capsule_cinema", "label": lab,
                      "tool": "UniversalVideoGenerationTool", "params": params, "trim_to": sh["duration"],
                      "prompt_source": "vlm" if cap.get("prompt") else "fallback",
-                     "user_assets": rep.get("user_assets", []),
-                     "warning": "原镜头是真实素材：生成结果只是近似，建议换成你自己的素材" if rep.get("user_assets") else ""})
+                     "user_assets": rep.get("user_assets", []), "overlays_in_frames": layers,
+                     "warning": semi().join(warn)})
     out = bdir / "remake" / "jobs.json"
     write_json(out, {"breakdown": str((bdir / "breakdown.json").resolve()), "capsule_root": str(capsule_root),
                      "run_dir": str(run_dir), "engine": engine or b.get("engine") or "seedance2.0", "mode": mode, "jobs": jobs})

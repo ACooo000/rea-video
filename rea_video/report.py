@@ -14,6 +14,7 @@ from pathlib import Path
 from . import aspects, entities
 from .classify import LABEL_ZH
 from .i18n import LangDict, T, join, lang, semi
+from .packaging import layer_name, anchor_text
 from .production import report_md as production_md
 from .util import fmt_time
 from .visual import LABEL_COLOR
@@ -421,6 +422,11 @@ def packaging_md(b: dict) -> list[str]:
         if dropped:
             L.append(T("- 另有 {n} 处画面里突然出现的东西没算作贴纸（3D/动画/版式画面里元素本来就会出现）",
                        "- {n} more things that pop up in the picture were not counted as stickers (elements appear on their own in 3D / animation / layout shots)", n=len(dropped)))
+    anchored = sorted((e for e in cues + stickers if e.get("anchor")), key=lambda e: e["t0"])
+    if anchored:
+        rows = [[f"{e['t0']:.2f}s", layer_name(e), anchor_text(e["anchor"])] for e in anchored[:80]]
+        L += _table([T("时间", "Time"), T("元素", "Layer"), T("跟哪句台词", "Spoken line")], rows,
+                    fold_title=T("按台词定位（{n} 处，复刻换文案时按这句话放，不按原秒数）", "placed by spoken line ({n}; with new wording place each on its line, not the old second)", n=len(anchored)))
     if pack.get("vlm_text_effects"):
         fx = pack["vlm_text_effects"][:20]
         L += ["", f"<details><summary>{html.escape(T('VLM 看到的文字特效（{n}）', 'Text effects seen by the VLM ({n})', n=len(fx)))}</summary>", ""]

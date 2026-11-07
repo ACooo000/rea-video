@@ -4,6 +4,8 @@
 - still_motion / static_hold shots  -> rebuilt locally from one image using the measured
                                        zoom/pan (deterministic, no model call)
 - everything else                    -> original footage kept (marked in the compare video)
+- with overlays=True, the measured subtitles / 花字 / titles are laid back on over the replaced shots only (kept
+  original footage already carries them)
 Outputs remake.mp4 (original audio) and compare.mp4 (original | remake side by side)."""
 from __future__ import annotations
 
@@ -17,8 +19,8 @@ import cv2
 from .util import LOG, read_json
 
 
-def _ff(args: list[str]) -> None:
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
+def _ff(args: list[str], cwd: Path | None = None) -> None:
+    subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True, cwd=cwd)
 
 
 def render_still_motion(image: Path, out: Path, duration: float, size: tuple[int, int], fps: float,
@@ -92,7 +94,47 @@ def _original_segment(src: Path, out: Path, start: float, duration: float, size:
     return out
 
 
-def assemble(breakdown_path: Path, results_path: Path, out_dir: Path | None = None) -> str:
+def replaced_spans(b: dict, legend: list[tuple]) -> list[tuple[float, float]]:
+    """Time spans of shots no longer showing the original picture, adjacent ones merged."""
+    shots = {sh["index"]: sh for sh in b["shots"]}
+    spans: list[list[float]] = []
+    for i, how in legend:
+        if how == "original":
+            continue
+        a, z = shots[i]["start"], shots[i]["end"]
+        if spans and abs(spans[-1][1] - a) < 1e-3:
+            spans[-1][1] = z
+        else:
+            spans.append([a, z])
+    return [(a, z) for a, z in spans]
+
+
+def overlay_cues(b: dict, spans: list[tuple[float, float]]) -> tuple[list[dict], list[dict]]:
+    """Text layers to lay back on, clipped to the replaced spans, and the stickers there that need an asset by hand.
+    A layer cut by a span edge loses its entrance animation, so it does not pop in again mid-line."""
+    from .packaging import ANCHOR_KINDS, cjk_count, speech_lines
+
+    pack = b.get("packaging") or {}
+    speech = {c["id"] for c in speech_lines(pack.get("text_cues", [])) if c.get("id")}
+    cues, stickers = [], []
+    for c in pack.get("text_cues", []):
+        if c["kind"] == "scene" or c.get("part_of_picture"):
+            continue
+        # spoken lines and styled text go back on; other OCR reads only when they hold real words, not "8uXrH"-like noise
+        if not (c.get("id") in speech or (c["kind"] in ANCHOR_KINDS and c["kind"] != "label") or cjk_count(c.get("text", "")) >= 2):
+            continue
+        for a, z in spans:
+            lo, hi = max(c["t0"], a), min(c["t1"], z)
+            if hi - lo >= 0.1:
+                cues.append({**c, "t0": lo, "t1": hi, **({"anim_in": None} if lo > c["t0"] + 1e-3 else {}),
+                             **({"anim_out": None} if hi < c["t1"] - 1e-3 else {})})
+    for st in pack.get("stickers", []):
+        if not st.get("in_picture") and st.get("confidence") != "low" and any(min(st["t1"], z) - max(st["t0"], a) >= 0.1 for a, z in spans):
+            stickers.append({k: st.get(k) for k in ("id", "kind_zh", "what", "t0", "t1", "bbox", "image")})
+    return cues, stickers
+
+
+def assemble(breakdown_path: Path, results_path: Path, out_dir: Path | None = None, overlays: bool = False) -> str:
     b = read_json(breakdown_path)
     bdir = breakdown_path.parent
     jobs_path = results_path.with_name("jobs.json")
@@ -130,6 +172,22 @@ def assemble(breakdown_path: Path, results_path: Path, out_dir: Path | None = No
     lst.write_text("".join("file '" + str(p.resolve()).replace("'", "'\\''") + "'\n" for p in parts), encoding="utf-8")
     silent = out_dir / "remake_silent.mp4"
     _ff(["-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(silent)])
+    overlay_log: dict = {}
+    if overlays:
+        from .packaging import to_ass
+
+        cues, stickers = overlay_cues(b, replaced_spans(b, legend))
+        overlay_log = {"text": len(cues), "stickers_to_add": stickers}
+        if cues:
+            (out_dir / "overlays_remake.ass").write_text(to_ass(cues, w, h), encoding="utf-8")
+            try:  # relative name + cwd: no filter-string escaping of the path
+                _ff(["-i", silent.name, "-vf", "ass=overlays_remake.ass", "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+                     "remake_overlaid.mp4"], cwd=out_dir)
+                silent = out_dir / "remake_overlaid.mp4"
+                overlay_log["ass"] = str(out_dir / "overlays_remake.ass")
+            except subprocess.CalledProcessError as exc:  # ffmpeg built without libass
+                overlay_log["error"] = f"ffmpeg ass filter failed ({exc.returncode}); overlays_remake.ass can be burned in another editor"
+                LOG.warning(overlay_log["error"])
     final = out_dir / "remake.mp4"
     if b["source"].get("has_audio"):
         _ff(["-i", str(silent), "-i", str(src), "-map", "0:v", "-map", "1:a?", "-c:v", "copy", "-c:a", "aac", "-shortest", str(final)])
@@ -148,7 +206,7 @@ def assemble(breakdown_path: Path, results_path: Path, out_dir: Path | None = No
         except subprocess.CalledProcessError:
             if not with_text:
                 raise
-    (out_dir / "assemble_log.json").write_text(json.dumps({"legend": legend, "remake": str(final), "compare": str(compare)},
-                                                          ensure_ascii=False, indent=2), encoding="utf-8")
+    log = {"legend": legend, "remake": str(final), "compare": str(compare), **({"overlays": overlay_log} if overlays else {})}
+    (out_dir / "assemble_log.json").write_text(json.dumps(log, ensure_ascii=False, indent=2), encoding="utf-8")
     LOG.info("remake -> %s ; compare -> %s", final, compare)
-    return json.dumps({"remake": str(final), "compare": str(compare), "legend": legend}, ensure_ascii=False)
+    return json.dumps(log, ensure_ascii=False)

@@ -71,12 +71,13 @@ rea-video stems ref.mp4 -o out/ref
 CC=~/code/github/capsule-cinema   # capsule-cinema 仓库；也可以设 CAPSULE_CINEMA_ROOT，或 rea-video prefs capsule_root $CC 设一次，之后不用再带 --capsule-root
 rea-video remake-plan out/ref/breakdown.json --capsule-root $CC                  # AI 类镜头 → 首尾帧生成任务
 rea-video remake-run out/ref/remake/jobs.json                                    # 调 capsule-cinema 生成（会计费，可先 --dry-run）
-rea-video assemble out/ref/breakdown.json out/ref/remake/results.json            # 按原时间线拼回 + 对比片
+rea-video assemble out/ref/breakdown.json out/ref/remake/results.json            # 按原时间线拼回 + 对比片；加 --overlays 把字幕和花字叠回换掉的镜头
 rea-video capsule-draft out/ref/breakdown.json --capsule-root $CC --capsule-name my_remake
 ```
 
 - 静态图推拉和静帧：不调模型，本地用测得的缩放和平移参数精确重建。
 - 代码渲染和录屏：报告给出文字轨和版式，用 Remotion 重建。
+- 字幕、花字、贴纸：不进生成提示词。参考帧上带着原字幕的镜头，`remake-plan` 会提醒先擦掉；生成完用 `assemble --overlays` 叠回。
 - `capsule-draft`：通过 capsule-cinema 自带的 `tool_factory` 注入拆解结果，生成可复用的配方草稿，不需要改 capsule-cinema 的代码。
 
 见 [capsule-cinema.md](capsule-cinema.md)。

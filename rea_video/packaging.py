@@ -1174,6 +1174,135 @@ def anchored_sfx(path: str | Path, events: list[dict], known: list[dict]) -> lis
     return out
 
 
+# ----------------------------------------------------------------------------- speech anchors / persistent layers
+
+ANCHOR_KINDS = ("huazi", "title", "label", "counter")
+ANCHOR_BEFORE, ANCHOR_AFTER = 0.5, 1.0  # an element popping in just before a line starts / just after it ends still belongs to it
+
+
+def speech_lines(cues: list[dict]) -> list[dict]:
+    """The subtitle lane carrying the spoken lines: the one with the most different lines (a filing number or a
+    watermark repeats one text; OCR noise in a picture rarely forms 3+ distinct lines in one lane)."""
+    lanes: dict = {}
+    for c in cues:
+        if c["kind"] == "subtitle" and not c.get("part_of_picture"):
+            lanes.setdefault(c.get("lane"), []).append(c)
+    best = max(lanes.values(), key=lambda cs: (len({_norm(c["text"]) for c in cs}), sum(c["t1"] - c["t0"] for c in cs)), default=[])
+    return sorted(best, key=lambda c: c["t0"]) if len({_norm(c["text"]) for c in best}) >= 3 else []
+
+
+def cjk_count(s: str) -> int:
+    return sum(1 for ch in s if "\u3040" <= ch <= "\u9fff" or "\uac00" <= ch <= "\ud7af")
+
+
+def _shared_word(a: str, b: str) -> str | None:
+    """Longest run of characters both texts share: 2+ CJK characters or 4+ latin / digits."""
+    a, b = _norm(a), _norm(b)
+    if not a or not b:
+        return None
+    m = SequenceMatcher(None, a, b, autojunk=False).find_longest_match(0, len(a), 0, len(b))
+    w = a[m.a:m.a + m.size]
+    return w if m.size >= (2 if cjk_count(w) else 4) else None
+
+
+def line_anchor(t: float, text: str, lines: list[dict]) -> dict | None:
+    """Which spoken line an element entering at t belongs to. A shared word with a nearby line wins over plain timing
+    (a 花字 repeating the keyword is placed on that word); otherwise the line being spoken, else the one just
+    finished, else the one about to start."""
+    near = [ln for ln in lines if ln["t0"] - ANCHOR_BEFORE <= t <= ln["t1"] + ANCHOR_AFTER]
+    if not near:
+        return None
+    word_hits = [(ln, w) for ln in near if text and (w := _shared_word(text, ln["text"]))]
+    if word_hits:
+        ln, word = max(word_hits, key=lambda x: (len(x[1]), -abs(t - x[0]["t0"])))
+    else:
+        word = None
+        during = [ln for ln in near if ln["t0"] - 0.15 <= t < ln["t1"]]
+        after = [ln for ln in near if ln["t1"] <= t]
+        ln = during[-1] if during else (after[-1] if after else near[0])
+    if ln["t0"] - 0.15 <= t < ln["t1"]:
+        rel, dt = "during", t - ln["t0"]
+    elif t >= ln["t1"]:
+        rel, dt = "after", t - ln["t1"]
+    else:
+        rel, dt = "before", ln["t0"] - t
+    return {"line": ln["id"], "text": ln["text"], "rel": rel, "dt": round(max(0.0, dt), 2), "word": word}
+
+
+def anchor_layers(cues: list[dict], stickers: list[dict], cuts: list[float], min_persist_s: float = 2.0) -> None:
+    """Tie each 花字 / title / sticker to the spoken line it lands on, so a remake with new wording moves it with its
+    line instead of keeping the old second; mark layers that stay on across cuts (a disclaimer, a title bar, a
+    corner badge) as persistent, to be laid on once rather than generated shot by shot.
+
+    「文字标注」 also catches text inside the picture (packaging, UI, OCR noise), so a label is anchored only when it
+    repeats a word of the line, and a non-CJK persistent text only when it is read the same way at least twice."""
+    for e in cues + stickers:
+        e.pop("anchor", None)
+        e.pop("persistent", None)
+    lines = speech_lines(cues)
+    texts = [c for c in cues if c["kind"] in ANCHOR_KINDS and not c.get("part_of_picture")]
+    stk = [s for s in stickers if not s.get("in_picture") and s.get("confidence") != "low"]
+    for e in texts + stk:
+        if not lines or e["t1"] - e["t0"] > 6.0:  # a long-lived layer is not "said" by the line it starts on
+            continue
+        text = e.get("text") or ""
+        a = line_anchor(e["t0"], text, lines)
+        if a and a["word"] and len(a["word"]) < 0.5 * len(_norm(text)):
+            a["word"] = None  # two shared characters out of a long text is chance, not the keyword
+        if a and (e.get("kind") != "label" or a["word"]):
+            e["anchor"] = a
+    spans = [e for e in texts + stk
+             if e["t1"] - e["t0"] >= min_persist_s and any(e["t0"] + 0.2 < t < e["t1"] - 0.2 for t in cuts)]
+    for e in spans:
+        text = e.get("text") or ""
+        same = [o for o in spans if text and _similar(o.get("text") or "", text) >= 0.7]
+        if not text or cjk_count(text) >= 2 or len(same) >= 2:
+            e["persistent"] = {"cuts": sum(1 for t in cuts if e["t0"] + 0.2 < t < e["t1"] - 0.2)}
+
+
+def persistent_groups(elems: list[dict]) -> list[dict]:
+    """Persistent layers with the same text (one disclaimer re-laid after each transition) as one group."""
+    groups: list[dict] = []
+    for e in sorted((e for e in elems if e.get("persistent")), key=lambda e: e["t0"]):
+        text = e.get("text") or ""
+        g = next((g for g in groups if text and _similar(g["text"], text) >= 0.7), None)
+        if g:
+            g["t1"] = max(g["t1"], e["t1"])
+            g["n"] += 1
+        else:
+            groups.append({"text": text, "name": layer_name(e), "t0": e["t0"], "t1": e["t1"], "n": 1})
+    return groups
+
+
+def overlays_at(pack: dict | None, t0: float, t1: float) -> list[str]:
+    """Kinds of post-production layer on screen anywhere in [t0, t1] (subtitles, 花字, stickers ...), excluding words
+    that are the picture's own content. Used to warn when a frame handed to a generator carries them."""
+    if not pack:
+        return []
+    kinds = []
+    for c in pack.get("text_cues", []):
+        if c["kind"] != "scene" and not c.get("part_of_picture") and min(t1, c["t1"]) > max(t0, c["t0"]):
+            kinds.append(c.get("kind_zh") or c["kind"])
+    for s in pack.get("stickers", []):
+        if not s.get("in_picture") and s.get("confidence") != "low" and min(t1, s["t1"]) > max(t0, s["t0"]):
+            kinds.append(T("贴纸", "sticker"))
+    return list(dict.fromkeys(kinds))
+
+
+def anchor_text(a: dict) -> str:
+    """「line」 + where in it, for the report and summary."""
+    line = T("「{t}」", "\"{t}\"", t=a["text"].replace("/", " ")[:18])
+    pos = {"during": T("{l}开始后 {d:.1f}s", "{d:.1f}s into {l}"), "after": T("{l}说完后 {d:.1f}s", "{d:.1f}s after {l}"),
+           "before": T("{l}开始前 {d:.1f}s", "{d:.1f}s before {l}")}[a["rel"]].format(l=line, d=a["dt"])
+    return pos + (T("，对上「{w}」", ", on \"{w}\"", w=a["word"]) if a.get("word") else "")
+
+
+def layer_name(e: dict) -> str:
+    if e.get("text"):
+        return T("{k}「{t}」", "{k} \"{t}\"", k=e.get("kind_zh", ""), t=e["text"].replace("/", " ")[:14])
+    return str(e.get("what") or e.get("kind_zh") or T("贴纸", "sticker"))[:24]
+
+
 # ----------------------------------------------------------------------------- top level
 
 def analyze(path: str | Path, info: VideoInfo, cuts: list[float], out_dir: Path | None = None, ocr: bool = True) -> dict:
@@ -1282,14 +1411,23 @@ def to_ass(cues: list[dict], width: int, height: int) -> str:
         if c["kind"] == "scene":
             continue
         st = c.get("style") or {}
-        size = max(12, int(round(c["line_h"] * height * 0.95)))
+        x, y, w, h = c["bbox"]
+        rows = c["text"].split("/")
+        # a narrow tall box is a vertical column of characters; otherwise the text must fit the measured box width
+        vertical = len(rows) == 1 and len(_norm(rows[0])) > 1 and h * height > 2 * w * width
+        size = c["line_h"] * height * 0.95
+        if vertical:
+            size = w * width * 0.95
+        else:
+            em = max(sum(1.0 if cjk_count(ch) else 0.55 for ch in r) for r in rows)
+            size = min(size, w * width * 1.05 / max(1.0, em))
+        size = max(12, int(round(size)))
         name = f"{c['kind']}_{len(styles) + 1}"
         box = st.get("box")
-        outline = max(0, int(round(st.get("stroke_ratio", 0.0) * c["line_h"] * height))) if st.get("stroke") else 0
+        outline = max(0, int(round(st.get("stroke_ratio", 0.0) * size / 0.95))) if st.get("stroke") else 0
         styles[name] = (f"Style: {name},Sans,{size},{_ass_color(st.get('fill'), '#ffffff')},&H0000FFFF,"
                         f"{_ass_color(st.get('box_color') if box else st.get('stroke'), '#000000')},{_ass_color(st.get('box_color'), '#000000')},"
                         f"{-1 if st.get('weight', 0) > 0.2 else 0},0,0,0,100,100,0,{-c['angle']:.0f},{3 if box else 1},{outline if not box else 8},0,5,0,0,0,1")
-        x, y, w, h = c["bbox"]
         tags = f"\\pos({(x + w / 2) * width:.0f},{(y + h / 2) * height:.0f})"
         ak = (c.get("anim_in") or {}).get("kind")
         if ak == "pop":
@@ -1297,7 +1435,8 @@ def to_ass(cues: list[dict], width: int, height: int) -> str:
         elif ak == "fade" or (c.get("anim_out") or {}).get("kind") == "fade_out":
             tags += "\\fad(200,200)"
         # OCR text is literal: "{...}" would be read as override tags and "\\" as an escape
-        text = c["text"].replace("\\", "＼").replace("{", "｛").replace("}", "｝").replace("/", "\\N")
+        text = c["text"].replace("\\", "＼").replace("{", "｛").replace("}", "｝")
+        text = "\\N".join(text) if vertical else text.replace("/", "\\N")
         events.append(f"Dialogue: {0 if c['kind'] == 'subtitle' else 1},{_ts(c['t0'], '.')[1:-1]},{_ts(c['t1'], '.')[1:-1]},{name},,0,0,0,,{{{tags}}}{text}")
     return "\n".join(head + list(styles.values()) + ["", "[Events]",
                      "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"] + events) + "\n"
@@ -1381,6 +1520,16 @@ def summary_lines(pack: dict, sfx_align: dict | None = None) -> list[str]:
         on = sfx_align.get("sfx_on", {})
         if on:
             L.append(T("音效卡点：", "SFX hits on: ") + join(T("{k} {v} 处", "{k} ×{v}", k=EVENT_ZH.get(k, k), v=v) for k, v in sorted(on.items(), key=lambda kv: -kv[1])))
+    elems = [c for c in cues if c["kind"] in ANCHOR_KINDS and not c.get("part_of_picture")] + st
+    anchored = sorted((e for e in elems if e.get("anchor")), key=lambda e: (not e["anchor"].get("word"), e["t0"]))
+    if anchored:
+        L.append(T("按台词定位 {n} 处（换文案时跟着这句话走，不按原秒数放）：", "Placed by spoken line ×{n} (with new wording they follow the line, not the old second): ", n=len(anchored))
+                 + join(f"{layer_name(e)} → {anchor_text(e['anchor'])}" for e in anchored[:3]) + (T("等", " …") if len(anchored) > 3 else ""))
+    groups = persistent_groups(elems)
+    if groups:
+        L.append(T("常驻图层 {n} 个（跨切镜不变，复刻时整段叠一次，不进逐镜生成）：", "{n} persistent layers (unchanged across cuts: lay each on once for its span, not per shot): ", n=len(groups))
+                 + join(f"{g['name']} {g['t0']:.1f}–{g['t1']:.1f}s" + (T("（{k} 段）", " ({k} spans)", k=g["n"]) if g["n"] > 1 else "") for g in groups[:4])
+                 + (T("等", " …") if len(groups) > 4 else ""))
     return L
 
 
@@ -1550,6 +1699,7 @@ def finalize_pack(breakdown: dict, out: Path) -> dict | None:
             if all(abs(e["t"] - k) >= 0.12 for k in known):
                 sfx.append(dict(e, confidence="low"))
         sfx.sort(key=lambda e: float(e.get("t", 0)))
+    anchor_layers(cues, stickers, cuts)
     events = visual_events(cues, stickers, cuts)
     pack["sfx_alignment"] = align_sfx(sfx, events)
     pack["summary_zh"] = summary_lines({**pack, "stickers": stickers}, pack["sfx_alignment"])
@@ -1568,7 +1718,7 @@ def finalize_pack(breakdown: dict, out: Path) -> dict | None:
         (d / "overlays.ass").write_text(to_ass([c for c in cues if not c.get("part_of_picture")], w, h), encoding="utf-8")
         pack["files"]["ass"] = "packaging/overlays.ass"
     timeline = {"text": [{k: c.get(k) for k in ("id", "kind", "kind_zh", "t0", "t1", "text", "bbox", "style", "style_zh", "anim_in",
-                                                 "anim_out", "mid_motion", "follows", "part_of_picture")} for c in cues],
+                                                 "anim_out", "mid_motion", "follows", "part_of_picture", "anchor", "persistent")} for c in cues],
                 "stickers": stickers,
                 "sfx": [{k: e.get(k) for k in ("t", "type", "description", "source", "confidence", "on")} for e in sfx]}
     from .util import write_json
