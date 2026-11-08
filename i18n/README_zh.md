@@ -4,7 +4,7 @@
 
 逆向一切视频。
 
-逐镜头拆出一条视频是拍的、AI 生成的还是代码做的，并给出复刻方案。
+逐个镜头看一条视频是拍的、AI 生成的还是代码做的，再告诉你怎么复刻。
 
 中文 | [English](../README.md) | [Русский](README_ru.md) | [日本語](README_ja.md) | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md) | [Français](README_fr.md) | [Deutsch](README_de.md)
 
@@ -14,23 +14,23 @@
 
 [![Join our Discord](https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dZj8D3GqWT) [![Follow on X](https://img.shields.io/badge/Follow%20%40yao__june12106-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/yao_june12106)
 
-⭐ *觉得有用就点个 Star，让更多人看到 rea-video！*
+⭐ *觉得有用就点个 Star 吧，能让更多人看到它！*
 
 <img src="../docs/cases/demo.gif" width="440" alt="左：TikTok 手机实拍原片；右：别人用 AI 换产品重做的版本">
 
-左：TikTok 手机实拍原片；右：别人用 AI 换产品重做。rea-video 判断：左边全是实拍，一个场景两个机位；右边全是 AI，8 个镜头 3 次生成。
+左边是 TikTok 上手机实拍的原片，右边是别人换了个产品、用 AI 重做的版本。rea-video 的判断：左边全是实拍，一个场景、两个机位；右边全是 AI，8 个镜头分 3 次生成。
 
 </div>
 
 ## 快速开始
 
-rea-video 是给 AI 助手用的。在 Claude Code、Codex 这类能运行命令的 agent 里说：
+rea-video 是给 AI agent 用的。打开 Claude Code、Codex 这类能跑命令的 agent，直接说：
 
 ```text
 安装 https://github.com/JuneYaooo/rea-video ，然后拆解这条视频：/path/to/video.mp4
 ```
 
-agent 会自己装好命令行工具、读完拆解流程，然后从头跑完。电脑上需要有 ffmpeg 和 Python 3.10 以上。
+agent 会自己装好命令行工具、看懂拆解流程，然后一路跑完。电脑上需要有 ffmpeg 和 Python 3.10 以上。
 
 <details><summary>手动安装</summary>
 
@@ -49,7 +49,7 @@ rea-video --help
 - 复刻方案，按实拍、AI 生成、代码分开写
 - 完整报告 `report.html`：逐镜头截图、判断依据、提示词、拍法和声音拆解
 
-配一个看视频的模型，Gemini 豆包都行，把接口地址和密钥告诉 agent 就行。配上之后实拍、AI、3D 分得更准，每个镜头还会反推出提示词。不配也能用，agent 自己能看图的话，会补看没把握的镜头。
+还可以配一个能看视频的模型（Gemini、豆包都行），把接口地址和密钥给 agent 就好。配上之后实拍、AI、3D 分得更准，每个镜头还会反推出提示词。不配也能用，agent 自己能看图的话，会补看没把握的镜头。
 
 ## 能拆哪些视频
 
@@ -100,7 +100,7 @@ AI 人物对话 + 代码界面 + 8 秒真实录屏。5 个对话镜头被界面�
 <td width="50%" valign="top">
 <a href="../docs/cases.md#5-ai-音乐-mv歌是-ai-写的还是曲库的"><img src="../docs/cases/qing_mv/thumb.jpg"></a><br>
 <b>AI 音乐 MV</b> · 165 秒 · 86 镜<br>
-判出歌是 AI 生成的（实际是 Suno）。看图模型说是「影视剧实拍」的镜头，agent 从奏折上的伪汉字认出是 AI。<br>
+判出歌是 AI 生成的（实际用的是 Suno）。有些镜头看图模型说是「影视剧实拍」，agent 从奏折上的假汉字认出是 AI。<br>
 <a href="../docs/cases/videos/qing_mv.mp4">视频</a> · <a href="../docs/cases/qing_mv/report.md">报告</a>
 </td>
 </tr>
@@ -108,7 +108,7 @@ AI 人物对话 + 代码界面 + 8 秒真实录屏。5 个对话镜头被界面�
 <td width="50%" valign="top">
 <a href="../docs/cases.md#6-实拍带货沉浸式开箱"><img src="../docs/cases/unboxing/thumb.jpg"></a><br>
 <b>实拍开箱带货</b> · 72 秒 · 29 镜<br>
-全部实拍：头顶俯拍支架、一块地毯一个机位，无口播，同期声 + 曲库 BGM。转码后工具把 35% 判成 AI，agent 看图复核后 97% 实拍。<br>
+全部实拍：头顶俯拍支架、一块地毯一个机位，无口播，同期声 + 曲库 BGM。平台转码后，工具把 35% 判成了 AI，agent 看图复核后回到 97% 实拍。<br>
 <a href="../docs/cases/videos/unboxing.mp4">视频</a> · <a href="../docs/cases/unboxing/report.md">报告</a>
 </td>
 <td width="50%" valign="top">
@@ -162,7 +162,7 @@ rea-video 拆完，交给 [capsule-cinema](https://github.com/JuneYaooo/capsule-
 
 留出集的两个数分别是 holdout（9 条）和 holdout2（7 条）。
 
-原始文件只用工具基本够。从平台下载的视频压缩过，噪点证据没了，要靠看图才能回到 99% 以上。
+原始文件只用工具基本就够了。从平台下载的视频压缩过，噪点证据没了，要靠看图才能回到 99% 以上。
 
 抖音带货两条（实拍开箱、AI 与真人混合）只用工具 46%，开看图模型 64%，agent 看图复核后 97.5%：拍真实手机屏幕的画面工具会判成 3D / AI，目前要靠看图纠正。
 
@@ -239,4 +239,4 @@ rea-video 不直接出片。它先逐个镜头判断是拍的、AI 生成的还�
 
 ## 致谢
 
-思路来自 [REA（Reverse Engineer Anything）](https://github.com/morluto/rea)：从现象追到实现，结论附证据，用可测量的方式验证。
+思路来自 [REA（Reverse Engineer Anything）](https://github.com/morluto/rea)：从现象一路追到实现，结论都附证据，并且用测量来验证。
