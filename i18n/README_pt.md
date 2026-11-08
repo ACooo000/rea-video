@@ -4,8 +4,7 @@
 
 Faça a engenharia reversa de qualquer vídeo.
 
-Vídeo de apresentador, mesa de produto, vídeo de IA, 3D, motion graphics, edições mistas: mande qualquer um deles,<br>
-e ele mostra, plano a plano, como foram feitos a imagem, os textos estilizados, a edição e o áudio, e depois entrega um plano para você fazer o seu.
+Plano a plano: se foi filmado, gerado por IA ou feito em código, e como refazer.
 
 [中文](README_zh.md) | [English](../README.md) | [Русский](README_ru.md) | [日本語](README_ja.md) | [한국어](README_ko.md) | [Español](README_es.md) | Português | [Français](README_fr.md) | [Deutsch](README_de.md)
 
@@ -13,34 +12,15 @@ e ele mostra, plano a plano, como foram feitos a imagem, os textos estilizados, 
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 ![Agent](https://img.shields.io/badge/runs%20in-Claude%20Code%20%7C%20Codex-8A2BE2)
 
+[![Join our Discord](https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dZj8D3GqWT) [![Follow on X](https://img.shields.io/badge/Follow%20%40yao__june12106-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/yao_june12106)
+
+⭐ *Deixe uma estrela para que mais pessoas conheçam o rea-video!*
+
 <img src="../docs/cases/demo.gif" width="440" alt="Esquerda: original do TikTok gravado com celular; direita: remake com IA feito por outra pessoa, com outro produto">
 
-Esquerda: um anúncio do TikTok gravado com celular. Direita: um remake com IA feito por outra pessoa, trocando o produto.<br>
-Veredito do rea-video: o da esquerda é todo filmagem real, um cenário e duas posições de câmera; o da direita é todo gerado por IA, e seus 8 planos podem ser produzidos em 3 gerações.
+Esquerda: um anúncio do TikTok gravado com celular. Direita: um remake com IA, com outro produto. rea-video: a esquerda é toda filmagem real, um cenário e duas posições de câmera; a direita é toda IA, 8 planos em 3 gerações.
 
 </div>
-
-> Os relatórios são gerados em chinês ou em inglês (o agente passa `--lang`). A documentação detalhada por enquanto está em chinês; o agente a lê e responde no seu idioma. Os seis relatórios de exemplo abaixo estão em inglês, para você ver como é um relatório sem instalar nada.
-
-## O que ele consegue analisar
-
-| Tipo de vídeo | Exemplos | O que você recebe |
-|---|---|---|
-| Filmagem real | Apresentador falando para a câmera, mesa de produto, demonstração de produto na mão, vlog, visita a loja | Cenários e posições de câmera, enquadramento, movimentos de câmera, iluminação (12 esquemas com lista de equipamentos), correção de cor |
-| Vídeo de IA | Texto/imagem para vídeo, minissérie de IA, videoclipe de IA | Evidências, um prompt reconstruído por plano, como agrupar em gerações e qual modelo usar |
-| Avatar | Um retrato animado por áudio, sincronia labial | Quais planos são de avatar, que retrato e áudio você precisa |
-| 3D / animação | Vídeos explicativos em Blender / C4D, animação de produto, animação 2D, stop-motion | Se vale gerar com um modelo de vídeo ou renderizar a partir de código 3D |
-| Código / template | Tipografia animada, demos de interface, gráficos, cartões estilo slide | Texto, layout e tempo das animações, prontos para recriar como projeto Remotion |
-| Gravação de tela | Tutoriais de software, demos na web | Quais partes são material real que você mesmo vai precisar gravar |
-| Misto / edições | Personagens de IA + interface em código + gravação de tela real; filmagem real com edições de IA | Cada plano avaliado separadamente e depois remontado na linha do tempo original |
-
-Além de como a imagem foi feita, todo vídeo também recebe:
-
-- Legendas e textos estilizados: início e fim de cada linha (exporta para SRT / ASS), além de cor, contorno e como o texto entra
-- Figurinhas, emoji, picture-in-picture: onde ficam e por quanto tempo
-- Edição: onde estão os cortes, em que ritmo, se batem com a música
-- Áudio: voz humana ou de IA, música de IA ou de biblioteca e seu BPM, onde cai cada efeito sonoro
-- Material que você mesmo vai fornecer: gravações de tela, capturas de tela, fotos de produto
 
 ## Primeiros passos
 
@@ -70,6 +50,28 @@ Você recebe:
 - um `report.html` completo com quadros de cada plano, evidências, prompts, notas de câmera e iluminação e a análise do áudio
 
 Adicione um modelo que entenda vídeo — Gemini ou Doubao funcionam: passe ao agente o endpoint e a chave. Isso deixa mais precisa a distinção entre real/IA/3D e gera um prompt reconstruído para cada plano. Sem ele, tudo continua funcionando; se o seu agente consegue ver imagens, ele mesmo confere os planos duvidosos.
+
+> Os relatórios saem no idioma em que você pergunta (chinês ou inglês). Os relatórios de exemplo abaixo estão em inglês.
+
+## O que ele consegue analisar
+
+| Tipo de vídeo | Exemplos | O que você recebe |
+|---|---|---|
+| Filmagem real | Apresentador falando para a câmera, mesa de produto, demonstração de produto na mão, vlog, visita a loja | Cenários e posições de câmera, enquadramento, movimentos de câmera, iluminação (12 esquemas com lista de equipamentos), correção de cor |
+| Vídeo de IA | Texto/imagem para vídeo, minissérie de IA, videoclipe de IA | Evidências, um prompt reconstruído por plano, como agrupar em gerações e qual modelo usar |
+| Avatar | Um retrato animado por áudio, sincronia labial | Quais planos são de avatar, que retrato e áudio você precisa |
+| 3D / animação | Vídeos explicativos em Blender / C4D, animação de produto, animação 2D, stop-motion | Se vale gerar com um modelo de vídeo ou renderizar a partir de código 3D |
+| Código / template | Tipografia animada, demos de interface, gráficos, cartões estilo slide | Texto, layout e tempo das animações, prontos para recriar como projeto Remotion |
+| Gravação de tela | Tutoriais de software, demos na web | Quais partes são material real que você mesmo vai precisar gravar |
+| Misto / edições | Personagens de IA + interface em código + gravação de tela real; filmagem real com edições de IA | Cada plano avaliado separadamente e depois remontado na linha do tempo original |
+
+Além de como a imagem foi feita, todo vídeo também recebe:
+
+- Legendas e textos estilizados: início e fim de cada linha (exporta para SRT / ASS), além de cor, contorno e como o texto entra
+- Figurinhas, emoji, picture-in-picture: onde ficam e por quanto tempo
+- Edição: onde estão os cortes, em que ritmo, se batem com a música
+- Áudio: voz humana ou de IA, música de IA ou de biblioteca e seu BPM, onde cai cada efeito sonoro
+- Material que você mesmo vai fornecer: gravações de tela, capturas de tela, fotos de produto
 
 ## Exemplos
 
@@ -172,6 +174,10 @@ A detecção de material real fica entre 97% e 99%, e os limites dos planos est�
 2. Reunir evidências: mede os quadros (cadência de quadros, ruído do sensor, se a imagem inteira se desloca como um único plano, tags de AIGC nos metadados); olha as imagens (mãos, texto, física); escuta (BPM, tom, canto ou fala).
 3. Decidir: evidências concretas, como tags de AIGC e cadência de quadros, pesam mais do que "parece que". Conflitos são sinalizados para o agente revisar visualmente.
 4. Planejar o remake: agrupa os planos de acordo com o que o modelo de vídeo escolhido realmente consegue fazer, como duração máxima do clipe, suporte a múltiplos planos e quantas imagens de referência aceita.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=JuneYaooo/rea-video&type=Date)](https://star-history.com/#JuneYaooo/rea-video&Date)
 
 ## Perguntas frequentes
 
