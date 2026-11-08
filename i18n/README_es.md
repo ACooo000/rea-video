@@ -4,8 +4,7 @@
 
 Haz ingeniería inversa de cualquier vídeo.
 
-Vídeos a cámara, tabletop, vídeo con IA, 3D, motion graphics, montajes mixtos: dale cualquiera de ellos,<br>
-y te explica plano a plano cómo se hicieron la imagen, los textos con estilo, el montaje y el audio, y luego te da un plan para hacerlo tú mismo.
+Plano a plano: si se grabó, se generó con IA o se hizo con código, y cómo rehacerlo.
 
 [中文](README_zh.md) | [English](../README.md) | [Русский](README_ru.md) | [日本語](README_ja.md) | [한국어](README_ko.md) | Español | [Português](README_pt.md) | [Français](README_fr.md) | [Deutsch](README_de.md)
 
@@ -13,34 +12,15 @@ y te explica plano a plano cómo se hicieron la imagen, los textos con estilo, e
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 ![Agent](https://img.shields.io/badge/runs%20in-Claude%20Code%20%7C%20Codex-8A2BE2)
 
+[![Join our Discord](https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dZj8D3GqWT) [![Follow on X](https://img.shields.io/badge/Follow%20%40yao__june12106-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/yao_june12106)
+
+⭐ *Dale una estrella para que más gente descubra rea-video.*
+
 <img src="../docs/cases/demo.gif" width="440" alt="Izquierda: original de TikTok grabado con un móvil; derecha: el remake con IA que hizo otra persona con un producto distinto">
 
-Izquierda: un anuncio de TikTok grabado con un móvil. Derecha: el remake con IA que hizo otra persona, cambiando el producto.<br>
-Veredicto de rea-video: el de la izquierda es todo imagen real, un decorado y dos posiciones de cámara; el de la derecha es todo generado por IA, y sus 8 planos se pueden producir en 3 generaciones.
+Izquierda: un anuncio de TikTok grabado con un móvil. Derecha: un remake con IA con otro producto. rea-video: la izquierda es toda imagen real, un decorado y dos posiciones de cámara; la derecha es toda IA, 8 planos en 3 generaciones.
 
 </div>
-
-> Los informes se generan en chino o en inglés (tu agente pasa `--lang`). La documentación detallada está en chino por ahora; tu agente la lee y te responde en tu idioma. Los seis informes de ejemplo de abajo están en inglés, así puedes ver cómo es un informe sin instalar nada.
-
-## Qué puede analizar
-
-| Tipo de vídeo | Ejemplos | Qué obtienes |
-|---|---|---|
-| Imagen real | Vídeo a cámara, tabletop, demo de producto en mano, vlog, visita a tienda | Configuraciones de rodaje y posiciones de cámara, encuadre, movimientos de cámara, iluminación (12 esquemas con lista de equipo), etalonaje |
-| Vídeo con IA | Texto/imagen a vídeo, microdramas con IA, videoclips con IA | Evidencias, un prompt reconstruido por plano, cómo agrupar en generaciones y qué modelo usar |
-| Avatar | Un retrato animado por audio, sincronización labial | Qué planos son de avatar, qué retrato y qué audio necesitas |
-| 3D / animación | Vídeos explicativos en Blender / C4D, animación de producto, animación 2D, stop-motion | Si generarlo con un modelo de vídeo o renderizarlo a partir de código 3D |
-| Código / plantilla | Tipografía cinética, demos de UI, gráficos, tarjetas tipo diapositiva | Texto, maquetación y tiempos de animación, listos para reconstruir como proyecto de Remotion |
-| Grabación de pantalla | Tutoriales de software, demos web | Qué partes son material real que tendrás que grabar tú |
-| Mixto / montajes | Personajes de IA + UI en código + captura de pantalla real; imagen real con retoques de IA | Cada plano se evalúa por separado y luego se vuelve a montar sobre la línea de tiempo original |
-
-Además de cómo se hizo la imagen, cada vídeo incluye:
-
-- Subtítulos y textos con estilo: inicio y fin de cada línea (exporta a SRT / ASS), además de color, contorno y cómo entra el texto
-- Stickers, emojis, picture-in-picture: dónde aparecen y cuánto duran
-- Montaje: dónde están los cortes, a qué ritmo, si van a tempo
-- Audio: voz humana o de IA, música de IA o de biblioteca y su BPM, dónde cae cada efecto de sonido
-- Material que tendrás que aportar tú: grabaciones de pantalla, capturas, fotos de producto
 
 ## Inicio rápido
 
@@ -70,6 +50,28 @@ Obtienes:
 - un `report.html` completo con fotogramas por plano, evidencias, prompts, notas de cámara e iluminación, y el desglose del audio
 
 Añade un modelo que entienda vídeo (sirven tanto Gemini como Doubao): dale al agente el endpoint y la clave. Así distingue mejor entre imagen real, IA y 3D, y escribe un prompt reconstruido para cada plano. Sin él también funciona; si tu agente puede ver imágenes, revisará él mismo los planos dudosos.
+
+> Los informes salen en el idioma en que preguntes (chino o inglés). Los informes de ejemplo de abajo están en inglés.
+
+## Qué puede analizar
+
+| Tipo de vídeo | Ejemplos | Qué obtienes |
+|---|---|---|
+| Imagen real | Vídeo a cámara, tabletop, demo de producto en mano, vlog, visita a tienda | Configuraciones de rodaje y posiciones de cámara, encuadre, movimientos de cámara, iluminación (12 esquemas con lista de equipo), etalonaje |
+| Vídeo con IA | Texto/imagen a vídeo, microdramas con IA, videoclips con IA | Evidencias, un prompt reconstruido por plano, cómo agrupar en generaciones y qué modelo usar |
+| Avatar | Un retrato animado por audio, sincronización labial | Qué planos son de avatar, qué retrato y qué audio necesitas |
+| 3D / animación | Vídeos explicativos en Blender / C4D, animación de producto, animación 2D, stop-motion | Si generarlo con un modelo de vídeo o renderizarlo a partir de código 3D |
+| Código / plantilla | Tipografía cinética, demos de UI, gráficos, tarjetas tipo diapositiva | Texto, maquetación y tiempos de animación, listos para reconstruir como proyecto de Remotion |
+| Grabación de pantalla | Tutoriales de software, demos web | Qué partes son material real que tendrás que grabar tú |
+| Mixto / montajes | Personajes de IA + UI en código + captura de pantalla real; imagen real con retoques de IA | Cada plano se evalúa por separado y luego se vuelve a montar sobre la línea de tiempo original |
+
+Además de cómo se hizo la imagen, cada vídeo incluye:
+
+- Subtítulos y textos con estilo: inicio y fin de cada línea (exporta a SRT / ASS), además de color, contorno y cómo entra el texto
+- Stickers, emojis, picture-in-picture: dónde aparecen y cuánto duran
+- Montaje: dónde están los cortes, a qué ritmo, si van a tempo
+- Audio: voz humana o de IA, música de IA o de biblioteca y su BPM, dónde cae cada efecto de sonido
+- Material que tendrás que aportar tú: grabaciones de pantalla, capturas, fotos de producto
 
 ## Ejemplos
 
@@ -172,6 +174,10 @@ La detección de material real está entre el 97 y el 99 %, y los límites de pl
 2. Reunir evidencias: mide los fotogramas (cadencia de fotogramas, ruido del sensor, si toda la imagen se desplaza como un único plano, etiquetas AIGC en los metadatos); mira las imágenes (manos, texto, física); escucha (BPM, tonalidad, canto o habla).
 3. Decidir: la evidencia dura, como las etiquetas AIGC o la cadencia de fotogramas, pesa más que el "parece que". Los conflictos se marcan para que el agente los revise visualmente.
 4. Planificar el remake: agrupa los planos según lo que el modelo de vídeo de destino puede hacer de verdad, como la duración máxima del clip, si admite varios planos y cuántas imágenes de referencia acepta.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=JuneYaooo/rea-video&type=Date)](https://star-history.com/#JuneYaooo/rea-video&Date)
 
 ## Preguntas frecuentes
 

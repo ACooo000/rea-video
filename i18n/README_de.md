@@ -4,8 +4,7 @@
 
 Reverse Engineering für jedes Video.
 
-Talking Head, Tabletop, KI-Video, 3D, Motion Graphics, gemischte Schnitte: Gib ihm ein beliebiges davon,<br>
-und es sagt dir Shot für Shot, wie Bild, gestaltete Texte, Schnitt und Ton entstanden sind, und gibt dir dann einen Plan, um so ein Video selbst zu machen.
+Shot für Shot: gefilmt, KI-generiert oder programmiert – und wie man es nachbaut.
 
 [中文](README_zh.md) | [English](../README.md) | [Русский](README_ru.md) | [日本語](README_ja.md) | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md) | [Français](README_fr.md) | Deutsch
 
@@ -13,34 +12,15 @@ und es sagt dir Shot für Shot, wie Bild, gestaltete Texte, Schnitt und Ton ents
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 ![Agent](https://img.shields.io/badge/runs%20in-Claude%20Code%20%7C%20Codex-8A2BE2)
 
+[![Join our Discord](https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dZj8D3GqWT) [![Follow on X](https://img.shields.io/badge/Follow%20%40yao__june12106-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/yao_june12106)
+
+⭐ *Gib dem Repo einen Stern, damit mehr Leute rea-video finden!*
+
 <img src="../docs/cases/demo.gif" width="440" alt="Links: TikTok-Original, mit dem Handy gedreht; rechts: KI-Remake von jemand anderem mit einem anderen Produkt">
 
-Links: eine TikTok-Werbung, mit dem Handy gedreht. Rechts: das KI-Remake von jemand anderem, mit einem anderen Produkt.<br>
-Das Urteil von rea-video: Links ist alles echtes Filmmaterial, ein Set und zwei Kamerapositionen; rechts ist alles KI-generiert, und die 8 Shots lassen sich in 3 Generierungen erzeugen.
+Links: eine TikTok-Werbung, mit dem Handy gedreht. Rechts: ein KI-Remake mit anderem Produkt. rea-video: links alles echt gefilmt, ein Set, zwei Kamerapositionen; rechts alles KI, 8 Shots in 3 Generierungen.
 
 </div>
-
-> Berichte werden auf Chinesisch oder Englisch erstellt (dein Agent übergibt `--lang`). Die ausführliche Dokumentation gibt es vorerst nur auf Chinesisch; dein Agent liest sie und antwortet dir in deiner Sprache. Die sechs Beispielberichte unten sind auf Englisch, damit du ohne Installation sehen kannst, wie ein Bericht aussieht.
-
-## Was es zerlegen kann
-
-| Videotyp | Beispiele | Was du bekommst |
-|---|---|---|
-| Echtes Filmmaterial | Talking Head, Tabletop, Produktdemo aus der Hand, Vlog, Ladenbesuch | Sets und Kamerapositionen, Bildausschnitt, Kamerabewegungen, Licht (12 Setups mit Ausrüstungslisten), Color Grading |
-| KI-Video | Text/Bild-zu-Video, KI-Kurzserie, KI-Musikvideo | Belege, ein rekonstruierter Prompt pro Shot, wie man die Shots zu Generierungen bündelt und welches Modell man nimmt |
-| Avatar | Ein per Audio animiertes Porträt, Lippensynchronisation | Welche Shots Avatar-Shots sind, welches Porträt und welches Audio du brauchst |
-| 3D / Animation | Blender- / C4D-Erklärvideos, Produktanimation, 2D-Animation, Stop-Motion | Ob man mit einem Videomodell generiert oder aus 3D-Code rendert |
-| Code / Vorlage | Kinetische Typografie, UI-Demos, Diagramme, Karten im Folienstil | Text, Layout und Animations-Timing, bereit zum Nachbau als Remotion-Projekt |
-| Bildschirmaufnahme | Software-Tutorials, Web-Demos | Welche Teile echtes Material sind, das du selbst aufnehmen musst |
-| Gemischt / Schnitte | KI-Figuren + Code-UI + echte Bildschirmaufnahme; echtes Filmmaterial mit KI-Bearbeitung | Jeder Shot wird einzeln beurteilt und dann auf der Original-Timeline wieder zusammengesetzt |
-
-Neben der Frage, wie das Bild entstanden ist, bekommt jedes Video außerdem:
-
-- Untertitel und gestaltete Texte: Anfang und Ende jeder Zeile (Export als SRT / ASS), dazu Farbe, Kontur und wie der Text eingeblendet wird
-- Sticker, Emoji, Bild-in-Bild: wo sie sitzen und wie lange sie bleiben
-- Schnitt: wo die Schnitte liegen, wie schnell sie sind, ob sie auf den Beat fallen
-- Audio: menschliche oder KI-Stimme, KI- oder Archivmusik und ihre BPM, wo jeder Soundeffekt sitzt
-- Material, das du selbst liefern musst: Bildschirmaufnahmen, Screenshots, Produktfotos
 
 ## Schnellstart
 
@@ -70,6 +50,28 @@ Du bekommst:
 - einen vollständigen `report.html` mit Frames pro Shot, Belegen, Prompts, Hinweisen zu Kamera und Licht sowie der Audio-Analyse
 
 Füge ein videofähiges Modell hinzu – Gemini oder Doubao funktionieren beide: Gib dem Agenten Endpoint und Key. Damit werden die Einstufungen echt/KI/3D genauer, und für jeden Shot wird ein rekonstruierter Prompt geschrieben. Ohne Modell funktioniert es trotzdem; wenn dein Agent Bilder sehen kann, prüft er die unsicheren Shots selbst.
+
+> Berichte erscheinen in der Sprache, in der du fragst (Chinesisch oder Englisch). Die Beispielberichte unten sind auf Englisch.
+
+## Was es zerlegen kann
+
+| Videotyp | Beispiele | Was du bekommst |
+|---|---|---|
+| Echtes Filmmaterial | Talking Head, Tabletop, Produktdemo aus der Hand, Vlog, Ladenbesuch | Sets und Kamerapositionen, Bildausschnitt, Kamerabewegungen, Licht (12 Setups mit Ausrüstungslisten), Color Grading |
+| KI-Video | Text/Bild-zu-Video, KI-Kurzserie, KI-Musikvideo | Belege, ein rekonstruierter Prompt pro Shot, wie man die Shots zu Generierungen bündelt und welches Modell man nimmt |
+| Avatar | Ein per Audio animiertes Porträt, Lippensynchronisation | Welche Shots Avatar-Shots sind, welches Porträt und welches Audio du brauchst |
+| 3D / Animation | Blender- / C4D-Erklärvideos, Produktanimation, 2D-Animation, Stop-Motion | Ob man mit einem Videomodell generiert oder aus 3D-Code rendert |
+| Code / Vorlage | Kinetische Typografie, UI-Demos, Diagramme, Karten im Folienstil | Text, Layout und Animations-Timing, bereit zum Nachbau als Remotion-Projekt |
+| Bildschirmaufnahme | Software-Tutorials, Web-Demos | Welche Teile echtes Material sind, das du selbst aufnehmen musst |
+| Gemischt / Schnitte | KI-Figuren + Code-UI + echte Bildschirmaufnahme; echtes Filmmaterial mit KI-Bearbeitung | Jeder Shot wird einzeln beurteilt und dann auf der Original-Timeline wieder zusammengesetzt |
+
+Neben der Frage, wie das Bild entstanden ist, bekommt jedes Video außerdem:
+
+- Untertitel und gestaltete Texte: Anfang und Ende jeder Zeile (Export als SRT / ASS), dazu Farbe, Kontur und wie der Text eingeblendet wird
+- Sticker, Emoji, Bild-in-Bild: wo sie sitzen und wie lange sie bleiben
+- Schnitt: wo die Schnitte liegen, wie schnell sie sind, ob sie auf den Beat fallen
+- Audio: menschliche oder KI-Stimme, KI- oder Archivmusik und ihre BPM, wo jeder Soundeffekt sitzt
+- Material, das du selbst liefern musst: Bildschirmaufnahmen, Screenshots, Produktfotos
 
 ## Beispiele
 
@@ -172,6 +174,10 @@ Die Erkennung echter Assets liegt bei 97–99 %, und alle Shot-Grenzen sind korr
 2. Belege sammeln: die Frames messen (Frame-Takt, Sensorrauschen, ob sich das ganze Bild wie eine Ebene verschiebt, AIGC-Tags in den Metadaten); die Bilder ansehen (Hände, Text, Physik); hinhören (BPM, Tonart, Gesang oder Sprache).
 3. Entscheiden: Harte Belege wie AIGC-Tags und Frame-Takt wiegen schwerer als „sieht aus wie“. Widersprüche werden markiert, damit der Agent sie visuell prüft.
 4. Remake planen: Shots danach bündeln, was das Ziel-Videomodell tatsächlich kann, etwa maximale Cliplänge, Unterstützung für mehrere Shots und wie viele Referenzbilder es annimmt.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=JuneYaooo/rea-video&type=Date)](https://star-history.com/#JuneYaooo/rea-video&Date)
 
 ## FAQ
 

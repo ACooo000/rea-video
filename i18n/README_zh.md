@@ -4,8 +4,7 @@
 
 逆向一切视频。
 
-实拍口播、桌拍、AI 视频、3D、代码动效、混剪都能拆，<br>
-逐个镜头告诉你画面、花字、剪辑和声音是怎么做的，再告诉你怎么照着做一条。
+逐镜头拆出一条视频是拍的、AI 生成的还是代码做的，并给出复刻方案。
 
 中文 | [English](../README.md) | [Русский](README_ru.md) | [日本語](README_ja.md) | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md) | [Français](README_fr.md) | [Deutsch](README_de.md)
 
@@ -13,32 +12,15 @@
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 ![Agent](https://img.shields.io/badge/runs%20in-Claude%20Code%20%7C%20Codex-8A2BE2)
 
+[![Join our Discord](https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dZj8D3GqWT) [![Follow on X](https://img.shields.io/badge/Follow%20%40yao__june12106-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/yao_june12106)
+
+⭐ *觉得有用就点个 Star，让更多人看到 rea-video！*
+
 <img src="../docs/cases/demo.gif" width="440" alt="左：TikTok 手机实拍原片；右：别人用 AI 换产品重做的版本">
 
-左边是 TikTok 上的手机实拍原片，右边是别人用 AI 换了产品重做的版本。<br>
-rea-video 判断：左边全部实拍，一个场景、两个机位就能拍完；右边全部 AI 生成，8 个镜头可以合并成 3 次生成。
+左：TikTok 手机实拍原片；右：别人用 AI 换产品重做。rea-video 判断：左边全是实拍，一个场景两个机位；右边全是 AI，8 个镜头 3 次生成。
 
 </div>
-
-## 能拆哪些视频
-
-| 视频类型 | 常见例子 | 拆出什么 |
-|---|---|---|
-| 实拍 | 口播、桌拍、手持带货、vlog、探店 | 拍摄场次和机位，景别、运镜、布光（12 种方案附器材）、调色 |
-| AI 视频 | 文生 / 图生视频、AI 短剧、AI MV | 判断依据，每镜反推的提示词，合并成几次生成、用哪个模型 |
-| 数字人 | 人像被声音驱动说话、对口型 | 哪些镜头是数字人，需要的人像和音频 |
-| 3D / 动画 | Blender / C4D 科普、产品动画、2D 动画、定格动画 | 用视频模型生成还是写 3D 代码渲染 |
-| 代码 / 模板 | 文字动效、UI 演示、图表、PPT 式卡片 | 文字、版式、动效节奏，可以写成 Remotion 工程 |
-| 录屏 / 截图 | 软件教程、网页演示 | 哪些是真实素材，复刻时要你自己录 |
-| 混合 / 混剪 | AI 人物 + 代码界面 + 真实录屏，实拍口播 + 用本人出镜视频生成的 AI 带货段 | 每一镜分开判断，再按原时间线拼回 |
-
-除了画面怎么做的，每条视频还会拆：
-
-- 字幕和花字：每句字幕的起止时间（可导出 SRT / ASS），花字用什么颜色、描边、怎么出场
-- 贴纸、表情包、画中画：放在哪、停多久
-- 剪辑：在哪切、节奏多快、有没有卡节拍
-- 声音：真人还是 AI 配音，配乐是 AI 做的还是曲库的、多少 BPM，音效落在哪一下
-- 要你自己准备的素材：录屏、截图、产品图
 
 ## 快速开始
 
@@ -68,6 +50,26 @@ rea-video --help
 - 完整报告 `report.html`：逐镜头截图、判断依据、提示词、拍法和声音拆解
 
 配一个看视频的模型，Gemini 豆包都行，把接口地址和密钥告诉 agent 就行。配上之后实拍、AI、3D 分得更准，每个镜头还会反推出提示词。不配也能用，agent 自己能看图的话，会补看没把握的镜头。
+
+## 能拆哪些视频
+
+| 视频类型 | 常见例子 | 拆出什么 |
+|---|---|---|
+| 实拍 | 口播、桌拍、手持带货、vlog、探店 | 拍摄场次和机位，景别、运镜、布光（12 种方案附器材）、调色 |
+| AI 视频 | 文生 / 图生视频、AI 短剧、AI MV | 判断依据，每镜反推的提示词，合并成几次生成、用哪个模型 |
+| 数字人 | 人像被声音驱动说话、对口型 | 哪些镜头是数字人，需要的人像和音频 |
+| 3D / 动画 | Blender / C4D 科普、产品动画、2D 动画、定格动画 | 用视频模型生成还是写 3D 代码渲染 |
+| 代码 / 模板 | 文字动效、UI 演示、图表、PPT 式卡片 | 文字、版式、动效节奏，可以写成 Remotion 工程 |
+| 录屏 / 截图 | 软件教程、网页演示 | 哪些是真实素材，复刻时要你自己录 |
+| 混合 / 混剪 | AI 人物 + 代码界面 + 真实录屏，实拍口播 + 用本人出镜视频生成的 AI 带货段 | 每一镜分开判断，再按原时间线拼回 |
+
+除了画面怎么做的，每条视频还会拆：
+
+- 字幕和花字：每句字幕的起止时间（可导出 SRT / ASS），花字用什么颜色、描边、怎么出场
+- 贴纸、表情包、画中画：放在哪、停多久
+- 剪辑：在哪切、节奏多快、有没有卡节拍
+- 声音：真人还是 AI 配音，配乐是 AI 做的还是曲库的、多少 BPM，音效落在哪一下
+- 要你自己准备的素材：录屏、截图、产品图
 
 ## 案例
 
@@ -174,6 +176,10 @@ rea-video 拆完，交给 [capsule-cinema](https://github.com/JuneYaooo/capsule-
 2. 取证据：测画面（帧率规律、噪点、是不是整张图在推拉、文件里有没有 AIGC 标识）；看图（手指、文字、物理细节对不对）；听声音（BPM、调性、是唱还是说）。
 3. 综合判断：AIGC 标识、帧率这类硬证据优先于「看起来像」。几方意见冲突时标出来，交给 agent 看图复核。
 4. 出复刻方案：按目标视频模型的实际能力分批，比如单次能生成多长、能不能一次出多个镜头、能吃几张参考图。
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=JuneYaooo/rea-video&type=Date)](https://star-history.com/#JuneYaooo/rea-video&Date)
 
 ## 常见问题
 
