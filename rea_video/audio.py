@@ -18,6 +18,9 @@ import numpy as np
 from .media import extract_audio
 
 SR = 22050
+# share of a frame's energy in the percussive part. A sustained tone / drone sits near 1e-5; the quietest real hit
+# or drum in the eval set is ~5e-3. Below this there is no beat to count and no transient to call a sound effect
+PERC_FLOOR = 1e-3
 N_FFT = 1024
 HOP = 256
 T_HOP = HOP / SR
@@ -222,8 +225,17 @@ def sfx_type(S: np.ndarray, freqs: np.ndarray, frame_db: np.ndarray, c: int, hop
     return kind, {"dur": round(d, 3), "centroid_hz": int(centroid), "hf_ratio": round(hf_ratio, 3)}
 
 
+def perc_share(S: np.ndarray, Sp: np.ndarray) -> np.ndarray:
+    return (Sp ** 2).sum(axis=1) / ((S ** 2).sum(axis=1) + 1e-12)
+
+
+def has_transient(share: np.ndarray, c: int) -> bool:
+    return bool(share[max(0, c - 3):c + 4].max() >= PERC_FLOOR)
+
+
 def onset_envelope(path: str):
-    """(percussive onset curve, frame dB, magnitude STFT, freqs, seconds per frame) of a file's soundtrack."""
+    """(percussive onset curve, frame dB, magnitude STFT, freqs, seconds per frame, percussive share) of a file's
+    soundtrack."""
     x = extract_audio(path, SR)
     if x is None or len(x) < SR * 0.3:
         return None
@@ -232,7 +244,7 @@ def onset_envelope(path: str):
     _, Sp = hpss(S)
     frame_db = 10 * np.log10((S ** 2).mean(axis=1) + 1e-12)
     perc = np.maximum(0, np.diff(np.log1p(Sp.sum(axis=1)), prepend=0))
-    return perc, frame_db, S, freqs, T_HOP
+    return perc, frame_db, S, freqs, T_HOP, perc_share(S, Sp)
 
 
 def analyze_audio(path: str, cut_times: list[float] | None = None, visual_marks: list[float] | None = None) -> dict:
@@ -255,6 +267,7 @@ def analyze_audio(path: str, cut_times: list[float] | None = None, visual_marks:
     local_max = np.array([sb_db[max(0, i - w1):i + w1].max() for i in range(len(sb_db))])
     dip = sb_db < local_max - 12          # gaps between syllables / phrases
     harm_ratio = (Sh ** 2).sum(axis=1) / ((S ** 2).sum(axis=1) + 1e-12)
+    share = perc_share(S, Sp)
     win = int(round(1.0 / T_HOP))
     step = int(round(0.5 / T_HOP))
     speech_w, music_w = [], []
@@ -294,13 +307,15 @@ def analyze_audio(path: str, cut_times: list[float] | None = None, visual_marks:
     # ---------------- music: tempo, beats, key, sections ------------------------------------
     music: dict = {"present": music_ratio > 0.25, "ratio": round(music_ratio, 3), "segments": music_segs[:40]}
     beats = np.array([])
+    if music["present"] and float(np.percentile(share, 90)) < PERC_FLOOR:
+        music["no_beat"] = True  # a held tone / drone: nothing percussive to count a tempo from
     if music["present"]:
         env = perc - perc.mean()
         ac = np.correlate(env, env, "full")[len(env) - 1:]
         ac /= ac[0] + 1e-9
         lo, hi = int(60 / 190 / T_HOP), int(60 / 60 / T_HOP)
         lag = lo + int(np.argmax(ac[lo:hi])) if hi < len(ac) else 0
-        if lag:
+        if lag and not music.get("no_beat"):
             tempo = 60 / (lag * T_HOP)
             if tempo < 75:  # prefer the common 75-180 BPM octave
                 tempo *= 2
@@ -370,6 +385,8 @@ def analyze_audio(path: str, cut_times: list[float] | None = None, visual_marks:
             continue  # under a music bed only very prominent transients are trusted
         if len(beat_frames) and np.min(np.abs(beat_frames - c)) * T_HOP < 0.05:
             continue
+        if not has_transient(share, c) or c * T_HOP > dur - 0.1:
+            continue  # the onset curve is relative: a held tone's codec noise wobbles it; the last 0.1 s is the track stopping
         kind, info = sfx_type(S, freqs, frame_db, c, T_HOP)
         events.append({"t": round(c * T_HOP, 3), "type": kind, **info, "strength": round(strength, 1),
                        "source": "deterministic", "confidence": "low"})
@@ -449,7 +466,8 @@ def merge_audio_with_vlm(audio: dict, whole: dict | None) -> dict:
         src = m.get("source_guess") or "unknown"
         plan.append({"track": "music", "rule": "A03-music",
                      "what": semi().join(x for x in [m.get("style") or m.get("genre") or "", m.get("mood") or "",
-                                                   f"{music.get('tempo_bpm') or m.get('bpm_estimate') or '?'} BPM",
+                                                   (T("无明显节拍", "no clear beat") if music.get("no_beat") and not m.get("bpm_estimate")
+                                                    else f"{music.get('tempo_bpm') or m.get('bpm_estimate') or '?'} BPM"),
                                                    (f"{music['key']['tonic']} {music['key']['mode']}" if music.get("key") else "")] if x),
                      "how": (T("疑似知名歌曲，需要授权或换成风格相近的授权曲/生成曲", "Possibly a well-known song: needs a licence, or swap in a licensed / generated track in a similar style") if src == "popular_song" else
                              T("capsule-cinema UniversalMusicGenerationTool（Suno）或曲库：按 BPM/调性/情绪选曲，在段落变化点对齐镜头",

@@ -303,6 +303,8 @@ def _audio_md(b: dict) -> list[str]:
             L.append(T("- 歌词：{l}", "- Lyrics: {l}", l=str(vm["lyrics_excerpt"])[:120])
                      + (T("（唱的就是画面内容）", " (the lyrics describe the video itself)") if vm.get("lyrics_match_content") else ""))
         tempo = []
+        if mu.get("no_beat"):
+            tempo.append(T("无明显节拍（持续音，没有打击成分）", "no clear beat (a held tone, nothing percussive)"))
         if mu.get("tempo_bpm"):
             tempo.append(T("{bpm} BPM（也可能是 {alt}）", "{bpm} BPM (or {alt})", bpm=mu["tempo_bpm"], alt="/".join(str(t) for t in mu.get("tempo_alternatives", []))) if mu.get("tempo_alternatives")
                          else f"{mu['tempo_bpm']} BPM")

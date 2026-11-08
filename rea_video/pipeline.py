@@ -96,7 +96,8 @@ def decompose(video: str | Path, out_dir: str | Path, *, use_vlm: bool = False, 
         from .packaging import analyze as analyze_packaging, anchored_sfx, visual_events
 
         LOG.info("packaging layer: subtitle timeline, 花字, stickers%s", "" if ocr else " (no OCR: stickers only)")
-        pack = analyze_packaging(video, info, [s.start for s in shots[1:]], out, ocr=ocr)
+        pack = analyze_packaging(video, info, [s.start for s in shots[1:]], out, ocr=ocr,
+                                 speech=bool((audio.get("voice") or {}).get("present")) if audio.get("has_audio") else False)
         if info.has_audio:
             ev = [e for e in visual_events(pack["text_cues"], pack["stickers"], []) if e["type"] != "subtitle_in"]
             pack["sfx_anchored"] = anchored_sfx(video, ev, (audio.get("sfx") or {}).get("events", []))
@@ -746,7 +747,8 @@ def finalize(breakdown: dict, out: Path, engine: str | None = None) -> dict:
         a_parts.append(T("人声", "voice"))
     if audio.get("music", {}).get("present"):
         ms = srcs.get("music") or {}
-        a_parts.append(T("BGM {bpm}BPM（{src}", "music {bpm}BPM ({src}", bpm=audio['music'].get('tempo_bpm', '?'), src=ms.get('source_zh', T('来源待确认', 'source to confirm')))
+        a_parts.append(T("BGM {bpm}（{src}", "music {bpm} ({src}", bpm=T("无明显节拍", "no clear beat") if audio['music'].get('no_beat') else f"{audio['music'].get('tempo_bpm', '?')}BPM",
+                         src=ms.get('source_zh', T('来源待确认', 'source to confirm')))
                        + (T("，倾向{m}", ", leaning {m}", m=MUSIC_ZH[ms['leaning']]) if ms.get("source") == "unknown" else "") + T("）", ")"))
     n_sfx = len(breakdown["audio_plan"].get("sfx_merged", []))
     if n_sfx:

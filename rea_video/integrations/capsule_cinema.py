@@ -145,7 +145,7 @@ def export_capsule_analysis(b: dict, out_path: Path) -> Path:
     if (whole.get("music") or {}).get("style"):
         audio_rules.append(f"BGM：{whole['music']['style']}")
     elif a.get("music_likely"):
-        audio_rules.append(f"有背景音乐，约 {a.get('tempo_bpm')} BPM")
+        audio_rules.append(f"有背景音乐，约 {a.get('tempo_bpm')} BPM" if a.get("tempo_bpm") else "有背景音乐（无明显节拍）")
     if a.get("beat_synced_edit"):
         audio_rules.append("切镜卡在音乐节拍上")
     mu = a.get("music") or {}

@@ -66,3 +66,16 @@ def test_isolated_sfx_in_silence(tmp_path):
     ts = [e["t"] for e in a["sfx"]["events"]]
     assert all(any(abs(t - t0) < 0.08 for t in ts) for t0 in (1.0, 2.5, 4.0)), ts
     assert not a["music"]["present"]
+
+
+def test_held_tone_has_no_beat_or_sfx(tmp_path):
+    """A pure 440 Hz tone is a music-like bed with nothing percussive: no tempo, no sound effects."""
+    t = np.arange(int(12 * SR)) / SR
+    r = analyze_audio(str(_write_av(tmp_path, 0.3 * np.sin(2 * np.pi * 440 * t), "tone")))
+    assert r["music"].get("tempo_bpm") is None and r["music"].get("no_beat")
+    assert r["sfx"]["count"] == 0
+
+
+def test_beat_survives_percussive_floor(music_mp4):
+    r = analyze_audio(str(music_mp4))
+    assert not r["music"].get("no_beat") and r["music"].get("tempo_bpm")

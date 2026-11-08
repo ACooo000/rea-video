@@ -226,3 +226,30 @@ def test_pipeline_writes_packaging(tmp_path, media):
     assert not [s for s in pk["stickers"] if not s.get("in_picture")]
     md = (tmp_path / "edit" / "report.md").read_text(encoding="utf-8")
     assert "剪辑包装层" in md
+
+
+def test_numbered_labels_split_per_shot():
+    """SHOT 01 … SHOT 03 at one place: three labels (not one cue spanning the video), and not a subtitle lane."""
+    from rea_video.packaging import build_cues, classify_cues
+
+    items = []
+    for k in range(30):
+        t = k * 0.5
+        n = 1 + int(t // 5)
+        text = f"SHOT 0{n}" if k != 4 else "SHOT 07"  # one frame misread stays inside its run
+        items.append({"t": t, "text": text, "conf": 0.95, "bbox": [0.4, 0.48, 0.2, 0.03], "angle": 0.0, "style": None})
+    cues = build_cues(items, 0.5)
+    assert [c["text"] for c in cues] == ["SHOT 01", "SHOT 02", "SHOT 03"]
+    assert cues[1]["t0"] == 5.0
+    for c in cues:
+        c.update(style={}, t1=c["t1"])
+    classify_cues(cues, 15.0)
+    assert all(c["kind"] == "label" for c in cues)
+
+
+def test_counter_ticking_every_frame_stays_one_cue():
+    from rea_video.packaging import build_cues
+
+    items = [{"t": k * 0.5, "text": f"第{k}名", "conf": 0.9, "bbox": [0.4, 0.1, 0.2, 0.03], "angle": 0.0, "style": None}
+             for k in range(10)]
+    assert len(build_cues(items, 0.5)) == 1

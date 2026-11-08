@@ -321,7 +321,7 @@ def cmd_summary(args) -> int:
     if a.get("has_audio"):
         mu = a.get("music", {})
         lines += ["", f"{T('人声', 'Voice')}: {a.get('voice', {}).get('present')} ({a.get('voice', {}).get('ratio')}) | {T('音乐', 'Music')}: {mu.get('present')} "
-                      f"{mu.get('tempo_bpm')}BPM {(mu.get('key') or {}).get('tonic', '')}{(mu.get('key') or {}).get('mode', '')} | "
+                      f"{(T('无明显节拍', 'no beat') if mu.get('no_beat') else str(mu.get('tempo_bpm')) + 'BPM')} {(mu.get('key') or {}).get('tonic', '')}{(mu.get('key') or {}).get('mode', '')} | "
                       f"{T('音效', 'SFX')}: {len((b.get('audio_plan') or {}).get('sfx_merged', []))} | {T('卡点', 'beat-synced')}: {a.get('beat_synced_edit')}"]
         if (b.get("sound_sources") or {}).get("summary_zh"):
             lines.append(f"{T('声音来源', 'Sound sources')}: " + b["sound_sources"]["summary_zh"])

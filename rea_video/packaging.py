@@ -381,6 +381,46 @@ def _blocks(items: list[dict]) -> list[dict]:
     return out
 
 
+def _numbers(s: str) -> tuple[str, tuple[str, ...]]:
+    n = _norm(s)
+    return re.sub(r"\d+", "#", n), tuple(re.findall(r"\d+", n))
+
+
+def _split_numbered(c: dict) -> list[dict]:
+    """Same words, different number (SHOT 01 → SHOT 02, 第 1 步 → 第 2 步) read for two samples or more in a row:
+    one label per shot, not one cue. A number misread in a single frame stays part of its run."""
+    runs: list[list] = []
+    for o in c["obs"]:
+        skel, nums = _numbers(o["text"])
+        key = (skel, nums) if nums else None
+        if runs and (key is None or runs[-1][0] == key):
+            runs[-1][1].append(o)
+        else:
+            runs.append([key, [o]])
+    stable = [i for i, (key, obs) in enumerate(runs) if key is not None and len(obs) >= 2]
+    if len(stable) < 2:  # a number ticking every frame is a counter, one cue
+        return [c]
+    merged: list[list] = []
+    for i, (key, obs) in enumerate(runs):  # one-sample readings join the stable run before (the first one: after)
+        if i in stable and not (merged and merged[-1][0] == key):
+            merged.append([key, list(obs)])
+        elif merged:
+            merged[-1][1] += obs
+        else:
+            runs[stable[0]][1][:0] = obs
+    if len(merged) < 2 or len({k[0] for k, _ in merged if k}) != 1:
+        return [c]
+    out = []
+    for _, obs in merged:
+        votes: dict[str, int] = {}
+        for o in obs:
+            votes[o["text"]] = votes.get(o["text"], 0) + 1
+        text = max(votes, key=votes.get)
+        out.append({**c, "obs": obs, "first": obs[0]["t"], "last": obs[-1]["t"], "text": text,
+                    "conf": max(o["conf"] for o in obs if o["text"] == text), "reveal": False})
+    return out
+
+
 def build_cues(items: list[dict], step: float) -> list[dict]:
     """Track text blocks over time: same place + same words = one cue; same place, new words = the next cue."""
     by_t: dict[float, list[dict]] = {}
@@ -447,7 +487,7 @@ def build_cues(items: list[dict], step: float) -> list[dict]:
             prev["last"] = c["last"]
             continue
         keep.append(c)
-    cues = keep
+    cues = [p for c in keep for p in _split_numbered(c)]
     out = []
     for c in cues:
         obs = c["obs"]
@@ -568,7 +608,10 @@ def classify_cues(cues: list[dict], duration: float) -> None:
         # readable lines (kinetic typography flashing words for a fraction of a second is not a subtitle track)
         # a lane of changing numbers is a counter / chart value drawn by the picture, not a subtitle track
         counter = changing >= 2 and all(_NUMERIC.fullmatch(_norm(c["text"])) for c in lane)
-        is_sub = (changing >= 3 or (changing >= 2 and duration < 15)) and 0.7 <= med <= 7.0 and h < 0.07 and not tilted and not counter
+        # SHOT 01 → SHOT 02 → …, 第 1 步 → 第 2 步: the same words with a running number are a label, not lines read out
+        numbered = changing >= 2 and len({_numbers(c["text"])[0] for c in lane}) == 1 and all(_numbers(c["text"])[1] for c in lane)
+        is_sub = ((changing >= 3 or (changing >= 2 and duration < 15)) and 0.7 <= med <= 7.0 and h < 0.07 and not tilted
+                  and not counter and not numbered)
         for c in lane:
             c["_counter"] = counter
             c["lane"] = lanes.index(lane)
@@ -1140,12 +1183,12 @@ def align_sfx(sfx: list[dict], events: list[dict]) -> dict:
 def anchored_sfx(path: str | Path, events: list[dict], known: list[dict]) -> list[dict]:
     """Extra SFX candidates: a sharp transient right on a text pop / sticker entrance (not cuts: music hits
     land there too). Editors put a pop / ding on these moments far more often than chance."""
-    from .audio import onset_envelope, sfx_type
+    from .audio import has_transient, onset_envelope, sfx_type
 
     env = onset_envelope(str(path))
     if env is None:
         return []
-    perc, frame_db, S, freqs, hop_t = env
+    perc, frame_db, S, freqs, hop_t, share = env
     if not len(perc):
         return []
     peak_db = float(np.percentile(frame_db, 99))
@@ -1159,6 +1202,8 @@ def anchored_sfx(path: str | Path, events: list[dict], known: list[dict]) -> lis
         if a < 1 or b >= len(perc):
             continue
         c = a + int(np.argmax(perc[a:b]))
+        if not has_transient(share, c):
+            continue
         loc = float(np.percentile(perc[max(0, c - w2):c + w2], 90)) + 1e-6
         strength = float(perc[c]) / loc
         if strength < 1.6 or frame_db[c] < peak_db - 30:
@@ -1305,8 +1350,10 @@ def layer_name(e: dict) -> str:
 
 # ----------------------------------------------------------------------------- top level
 
-def analyze(path: str | Path, info: VideoInfo, cuts: list[float], out_dir: Path | None = None, ocr: bool = True) -> dict:
-    """Whole-video packaging pass: text cues (subtitles / 花字 / titles / labels) and stickers."""
+def analyze(path: str | Path, info: VideoInfo, cuts: list[float], out_dir: Path | None = None, ocr: bool = True,
+            speech: bool | None = None) -> dict:
+    """Whole-video packaging pass: text cues (subtitles / 花字 / titles / labels) and stickers. speech=False (no voice
+    in the audio) rules out keywords lighting up as they are said."""
     items, step = ocr_pass(path, info) if ocr else ([], 0.0)
     cues = build_cues(items, step) if items else []
     for k, c in enumerate(sorted(cues, key=lambda c: (c["t0"], c["bbox"][1])), 1):
@@ -1327,10 +1374,13 @@ def analyze(path: str | Path, info: VideoInfo, cuts: list[float], out_dir: Path 
         c.pop("_last", None)
         c.pop("_first", None)
         c["style"] = merge_style(c.pop("style_obs"))
-        if c["style"].get("multicolor") and not c.pop("first_style_multicolor", False) and c["samples"] >= 2:
+        if c["style"].get("multicolor") and not c.pop("first_style_multicolor", False) and c["samples"] >= 2 and speech is not False:
             c["style"]["highlight_timing"] = "spoken"  # colour arrives later: keyword lights up when it is said
         c.pop("first_style_multicolor", None)
     classify_cues(cues, info.duration)
+    for c in cues:  # a label / title changing colour is the picture behind it (colour bars, a cut), not a spoken keyword
+        if c["kind"] not in ("subtitle", "huazi"):
+            c["style"].pop("highlight_timing", None)
     # subtitles in one lane share a template: per-line fill / stroke readings that disagree with the lane are noise
     # (a keyword bouncing in its highlight colour, a dark frame); keyword highlight stays per line
     lanes: dict[int, list[dict]] = {}
