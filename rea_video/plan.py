@@ -80,6 +80,66 @@ def shot_prompts(shot: dict) -> dict:
     return out
 
 
+def _where(cx: float | None, cy: float | None) -> tuple[str, str] | None:
+    """Where the measured subject sits in the frame, (zh, en)."""
+    if cx is None or cy is None:
+        return None
+    h = ("左侧", "left") if cx < 0.38 else ("右侧", "right") if cx > 0.62 else ("中间", "centre")
+    v = ("上部", "upper") if cy < 0.38 else ("下部", "lower") if cy > 0.62 else ("", "")
+    if h[1] == "centre" and not v[1]:
+        return "主体在画面正中", "subject centred in frame"
+    return f"主体在画面{v[0]}{h[0]}".replace("上部中间", "上部正中").replace("下部中间", "下部正中"), \
+        f"subject in the {(v[1] + ' ') if v[1] else ''}{h[1]} of the frame".replace("upper centre", "upper middle").replace("lower centre", "lower middle")
+
+
+def framing_words(shot: dict) -> tuple[str, str]:
+    """Shot size, camera angle, subject position and camera move as a prompt prefix, (report language, English).
+    The readers' free-text prompts tend to keep the style words and drop these, which flattens the camera in a remake."""
+    from .aspects.base import seen
+    from .i18n import lang
+
+    asp = shot.get("aspects") or {}
+    fr = (asp.get("framing") or {}).get("result") or {}
+    fm = (asp.get("framing") or {}).get("measured") or {}
+    cm = (asp.get("camera") or {}).get("measured") or {}
+    v = shot.get("review") or shot.get("vlm") or {}
+    size = fr.get("shot_size") or v.get("shot_size")
+    angle = fr.get("camera_angle")
+    comp = seen(shot, "framing", "composition")
+    comp = comp.get("agent") or comp.get("vlm")
+    where = _where(fm.get("center_x"), fm.get("center_y")) if fm.get("subject") in ("face", "focus") else None
+    move = cm.get("move") or (v.get("camera_move") if v.get("camera_move") not in (None, "", "固定", "static") else None)
+    loc = [x for x in (size, angle, comp or (where and (where[1] if lang() == "en" else where[0])),
+                       move and T("镜头{m}", "camera {m}", m=move)) if x]
+    en_size = {"大特写": "extreme close-up", "特写": "close-up", "近景": "medium close-up", "中景": "medium shot",
+               "全景": "full shot", "远景": "wide shot"}
+    en_move = {"推": "push-in", "拉": "pull-out", "摇/移": "pan / track", "摇": "pan", "移": "track", "跟": "follow",
+               "环绕": "orbit", "手持": "handheld"}
+    en_angle = {"平视": "eye level", "略俯拍": "slightly high angle", "俯拍": "high angle", "顶拍": "top-down overhead",
+                "略仰拍": "slightly low angle", "仰拍": "low angle"}
+
+    def head(x):  # "顶拍（正上方俯拍桌面）" -> "顶拍"
+        return re.split(r"[（(，,]", x)[0].strip() if x else x
+
+    en = [en_size.get(head(size), size if size and size.isascii() else None),
+          en_angle.get(head(angle), angle if angle and angle.isascii() else None),
+          comp if comp and comp.isascii() else (where[1] if where and not comp else None),
+          move and ("camera " + en_move.get(move, move if move.isascii() else "moves"))]
+    return T("，", ", ").join(loc), ", ".join(x for x in en if x)
+
+
+def _with_framing(prompt: str, words: str) -> str:
+    """Prefix the framing words unless the prompt already states each of them."""
+    if not prompt or not words:
+        return prompt
+    sep = "，" if "，" in words else ", "
+    missing = [w for w in words.split(sep) if w and w not in prompt]
+    if not missing:
+        return prompt
+    end = "。" if not words.isascii() else ". "
+    return sep.join(missing) + end + prompt
+
+
 def _move_words(f: dict) -> str:
     """Measured camera / whole-picture motion of a rendered shot in words (what the code camera should do)."""
     cam = f.get("camera")
@@ -242,10 +302,14 @@ class Planner:
             gen_dur = int(min(hi, max(lo, round(dur + 0.49))))
             rep = shot_prompts(shot)
             prompt = rep.get("video_prompt") or (shot.get("vlm") or shot.get("review") or {}).get("description") or ""
+            # the measured / seen framing goes in front, so a remake keeps the camera height, angle and subject position
+            fw, fw_en = framing_words(shot)
+            still = T("，", ", ").join(w for w in fw.split(T("，", ", ")) if not w.startswith(T("镜头", "camera ")))
             plan["capsule"] = {
                 "engine": engine, "generation_type": gen_type, "duration": gen_dur,
                 "trim_to": round(dur, 3), "aspect_ratio": video.get("aspect_ratio", "9:16"),
-                "prompt": prompt, "prompt_en": rep.get("video_prompt_en", ""), "image_prompt": rep.get("image_prompt", ""),
+                "prompt": _with_framing(prompt, fw), "prompt_en": _with_framing(rep.get("video_prompt_en", ""), fw_en),
+                "image_prompt": _with_framing(rep.get("image_prompt", ""), still), "framing": fw,
                 "needs_split": dur > hi,
             }
             if not prompt:

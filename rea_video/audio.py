@@ -225,6 +225,22 @@ def sfx_type(S: np.ndarray, freqs: np.ndarray, frame_db: np.ndarray, c: int, hop
     return kind, {"dur": round(d, 3), "centroid_hz": int(centroid), "hf_ratio": round(hf_ratio, 3)}
 
 
+def steady_tone(Sh: np.ndarray, freqs: np.ndarray, frames: np.ndarray) -> float | None:
+    """Frequency of a single held pitch, or None. Every frame's harmonic energy sits in one narrow spectral
+    peak (a sine wave: one bin and its window leakage) and the peak stays on the same bin; a chord, a melody
+    or a pad spreads over several peaks or moves."""
+    M = Sh[frames] ** 2
+    if len(M) < int(1.0 / T_HOP):
+        return None
+    pk = M.argmax(axis=1)
+    near = np.abs(np.arange(M.shape[1])[None, :] - pk[:, None]) <= 2
+    conc = (M * near).sum(axis=1) / (M.sum(axis=1) + 1e-12)
+    mode = int(np.bincount(pk).argmax())
+    if float((np.abs(pk - mode) <= 1).mean()) > 0.9 and float(np.median(conc)) > 0.8:
+        return float(freqs[mode])
+    return None
+
+
 def perc_share(S: np.ndarray, Sp: np.ndarray) -> np.ndarray:
     return (Sp ** 2).sum(axis=1) / ((S ** 2).sum(axis=1) + 1e-12)
 
@@ -309,6 +325,15 @@ def analyze_audio(path: str, cut_times: list[float] | None = None, visual_marks:
     beats = np.array([])
     if music["present"] and float(np.percentile(share, 90)) < PERC_FLOOR:
         music["no_beat"] = True  # a held tone / drone: nothing percussive to count a tempo from
+        mframes = np.zeros(len(Sh), bool)
+        for a_, b_ in music_segs:
+            mframes[int(a_ / T_HOP):int(b_ / T_HOP)] = True
+        hz = steady_tone(Sh, freqs, mframes & ~silent)
+        if hz:
+            # one pitch held the whole time (test tone, beep, mains hum): it passes the "loud and harmonic" bed test,
+            # but there is no melody, no harmony and no beat, so it is not music
+            music = {"present": False, "ratio": music["ratio"], "segments": music_segs[:40],
+                     "steady_tone": {"hz": round(hz, 1), "segments": music_segs[:40]}}
     if music["present"]:
         env = perc - perc.mean()
         ac = np.correlate(env, env, "full")[len(env) - 1:]

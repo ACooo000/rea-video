@@ -105,3 +105,18 @@ def test_inserts_do_not_split_a_generation(tmp_path):
     assert u["shots"] == [2, 4, 6] and u["duration"] == 6.0 and len(u["ranges"]) == 3
     assert "镜头2（2.0–3.5s）" in u["prompt"]  # generation-relative times
     assert "1 个代码工程（3 段）" in plan["summary"]
+
+
+def test_framing_goes_into_capsule_prompt():
+    from rea_video.plan import _with_framing, framing_words
+
+    shot = {"aspects": {"framing": {"result": {"shot_size": "近景", "camera_angle": "略俯拍"},
+                                    "measured": {"subject": "face", "center_x": 0.3, "center_y": 0.7}},
+                        "camera": {"measured": {"move": "推"}}},
+            "vlm": {"replication": {"video_prompt": "女生在厨房切菜"}}}
+    zh, en = framing_words(shot)
+    assert zh == "近景，略俯拍，主体在画面下部左侧，镜头推"
+    assert en == "medium close-up, slightly high angle, subject in the lower left of the frame, camera push-in"
+    assert _with_framing("女生在厨房切菜", zh) == zh + "。女生在厨房切菜"
+    assert _with_framing("近景，略俯拍，主体在画面下部左侧，镜头推，切菜", zh).startswith("近景，略俯拍，主体")  # nothing added twice
+    assert _with_framing("", zh) == ""

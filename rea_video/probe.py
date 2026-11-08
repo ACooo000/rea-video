@@ -44,6 +44,7 @@ SIGNATURES: list[tuple[str, str, str]] = [
     (r"\bvid:v[0-9a-z]{8,}", "platform", "Douyin/TikTok"),
     (r"kuaishou|快手", "platform", "Kuaishou"),
     (r"xiaohongshu|小红书", "platform", "Xiaohongshu"),
+    (r"ISO Media file produced by Google", "platform", "YouTube"),
 ]
 
 CAMERA_KEYS = ("com.apple.quicktime.make", "com.apple.quicktime.model", "make", "model", "com.android.manufacturer",

@@ -71,6 +71,12 @@ def per_clip_audio(path: str, cuts: list[float], duration: float) -> dict:
             "resets_at_cuts": r > 1.6}
 
 
+def mt_title(meta: dict) -> str:
+    """Title of the platform music tag (Douyin / Xiaohongshu post metadata), or ''."""
+    mt = meta.get("music") if isinstance(meta.get("music"), dict) else {}
+    return str(mt.get("title") or "")
+
+
 def music_ending(audio: dict, duration: float) -> str:
     m = audio.get("music") or {}
     ec = audio.get("energy_curve") or []
@@ -139,6 +145,10 @@ def classify_sound_sources(b: dict, meta: dict | None = None) -> dict:
                 ev.append(T("人声是说话/旁白而不是唱歌（持续音高占比 {r:.2f}）：属于「旁白 + BGM」的普通视频形式",
                             "The voice is speech / narration, not singing (sustained-pitch ratio {r:.2f}): a regular \"voice-over + music bed\" video",
                             r=voice.get('sustained_note_ratio', 0)))
+        # something about this very track: a sung music video, what the VLM heard, or the platform's music tag.
+        # The bed-under-a-video prior, the ending shape and a whole-file AIGC marker are not enough on their own
+        heard = bool(is_mv or ctx["music_mv_maybe"] or wm.get("lyrics_match_content") is True or wm.get("song_guess")
+                     or wm.get("source_guess") in ("ai_generated", "popular_song", "stock_library") or mt_title(meta))
         if wm.get("lyrics_match_content") is True:
             p["ai_generated"] += 1.2
             ev.append(T("歌词唱的正是这条视频的具体内容/角色/商品：为本片定制的歌，几乎只能是 AI 生成或专门创作",
@@ -149,11 +159,11 @@ def classify_sound_sources(b: dict, meta: dict | None = None) -> dict:
         sg = wm.get("source_guess")
         if sg in ("ai_generated", "popular_song", "stock_library"):
             key = {"stock_library": "existing_library"}.get(sg, sg)
-            p[key] += 0.5
+            p[key] += 0.8  # what was heard outweighs the format prior plus the ending shape
             ev.append(T("VLM 听感判断：{s}", "VLM listening judgement: {s}",
                         s={'ai_generated': T('AI 生成', 'AI-generated'), 'popular_song': T('知名歌曲', 'well-known song'), 'stock_library': T('曲库配乐', 'stock library music')}[sg]))
         mt = (meta.get("music") or {}) if isinstance(meta.get("music"), dict) else {}
-        if mt.get("title"):
+        if mt_title(meta):
             original = bool(mt.get("is_original")) or any(k in str(mt.get("title")) for k in ("原声", "original sound"))
             if original:
                 p["ai_generated"] += 0.3 if (is_mv or ctx["music_mv_maybe"]) else 0.0
@@ -185,8 +195,12 @@ def classify_sound_sources(b: dict, meta: dict | None = None) -> dict:
         probs = _norm(p)
         lab = max(probs, key=probs.get)
         conf = probs[lab]
+        decided = conf >= 0.45 and heard
+        if not heard:
+            ev.append(T("除了视频形式的先验和片尾形状这类弱证据，没有关于这段音乐本身的证据（没听出来源、没有平台音乐信息）：来源待确认，AI 生成的配乐在这里和曲库配乐分不开",
+                        "Nothing about this track beyond the format prior and weak cues like the ending (no source heard, no platform music tag): source to confirm; an AI-generated bed cannot be told from a library bed here"))
         out["music"] = {
-            "source": lab if conf >= 0.45 else "unknown", "source_zh": MUSIC_ZH[lab if conf >= 0.45 else "unknown"],
+            "source": lab if decided else "unknown", "source_zh": MUSIC_ZH[lab if decided else "unknown"],
             "leaning": lab, "probs": probs, "ending": ending, "evidence": ev,
             "how_to_confirm": [
                 T("在抖音/小红书原视频页面看音乐标签：显示歌名 → 现成曲目；显示「@作者创作的原声」→ 作者自己上传（MV 类多为 AI 歌）",

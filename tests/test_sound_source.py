@@ -54,3 +54,13 @@ def test_sung_vocals_without_vlm_lean_ai_but_tts_narration_does_not():
     b["audio"]["voice"].update({"style": "speech", "sung": False, "sustained_note_ratio": 0.15})
     r = classify_sound_sources(b)
     assert not r["format_context"]["music_mv_maybe"] and r["music"]["leaning"] == "existing_library"
+
+
+def test_prior_alone_is_only_a_leaning():
+    # no VLM, no platform tag: an instrumental bed under narration leans library but is not called library
+    r = classify_sound_sources(_b(ending_curve=[0.0] * 40))
+    assert r["music"]["leaning"] == "existing_library" and r["music"]["source"] == "unknown"
+    assert "待确认" in r["summary_zh"] or "to confirm" in r["summary_zh"]
+    w = {"music": {"present": True, "has_vocals": False, "source_guess": "ai_generated"}, "narration": {"type": "tts"}}
+    r = classify_sound_sources(_b(whole=w))
+    assert r["music"]["leaning"] == "ai_generated"  # heard as AI: beats the library prior and the hard-cut ending

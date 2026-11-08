@@ -72,8 +72,17 @@ def test_held_tone_has_no_beat_or_sfx(tmp_path):
     """A pure 440 Hz tone is a music-like bed with nothing percussive: no tempo, no sound effects."""
     t = np.arange(int(12 * SR)) / SR
     r = analyze_audio(str(_write_av(tmp_path, 0.3 * np.sin(2 * np.pi * 440 * t), "tone")))
-    assert r["music"].get("tempo_bpm") is None and r["music"].get("no_beat")
+    assert r["music"].get("tempo_bpm") is None and not r["music"]["present"]
+    assert abs(r["music"]["steady_tone"]["hz"] - 440) < 25
     assert r["sfx"]["count"] == 0
+
+
+def test_held_chord_is_still_music(tmp_path):
+    """A sustained pad (several notes, no drums) is music, not a test tone."""
+    t = np.arange(int(12 * SR)) / SR
+    y = 0.08 * sum(np.sin(2 * np.pi * f * t) for f in (261.63, 329.63, 392.0, 523.25))
+    r = analyze_audio(str(_write_av(tmp_path, y, "pad")))
+    assert r["music"]["present"] and not r["music"].get("steady_tone")
 
 
 def test_beat_survives_percussive_floor(music_mp4):

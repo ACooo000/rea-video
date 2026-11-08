@@ -148,8 +148,8 @@ def _span(a, z) -> str:
 
 # ------------------------------------------------------------------ sections --------------------------------------
 
-TRANS_ZH = LangDict({"cut": "硬切", "jump": "跳剪", "flash": "闪亮切", "fade": "淡入淡出", "dissolve": "叠化", "mg_transition": "版式切换"},
-                    en={"cut": "cut", "jump": "jump cut", "flash": "flash cut", "fade": "fade", "dissolve": "dissolve", "mg_transition": "layout change"})
+TRANS_ZH = LangDict({"cut": "硬切", "jump": "跳剪", "flash": "闪亮切", "fade": "淡入淡出", "dissolve": "叠化", "wipe": "划像/转场特效", "mg_transition": "版式切换"},
+                    en={"cut": "cut", "jump": "jump cut", "flash": "flash cut", "fade": "fade", "dissolve": "dissolve", "wipe": "wipe / transition effect", "mg_transition": "layout change"})
 
 
 def _head_md(b: dict) -> list[str]:
@@ -326,6 +326,10 @@ def _audio_md(b: dict) -> list[str]:
         L += _source_lines("music")
         if tracks.get("music"):
             L.append(T("- 复刻：{h}", "- Remake: {h}", h=tracks["music"]["how"]))
+    elif mu.get("steady_tone"):
+        L.append(T("- 不是音乐：整段是一个持续单音（约 {hz:.0f} Hz），没有旋律、和声和节拍，像测试音、提示音或电流声",
+                   "- Not music: one held pitch (about {hz:.0f} Hz) with no melody, harmony or beat, like a test tone, a beep or mains hum",
+                   hz=mu["steady_tone"]["hz"]))
     else:
         L.append(T("- 未检测到持续的音乐床", "- No sustained music bed detected"))
 

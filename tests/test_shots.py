@@ -48,3 +48,35 @@ def test_generated_clip_is_retimed_to_the_shot():
     assert abs(fit_speed(5.0, 2.5) - 2.0) < 1e-9
     assert abs(fit_speed(2.0, 4.0) - 0.8) < 1e-9  # too short: slowed a little, the rest held
     assert fit_speed(0.0, 2.0) == 1.0
+
+
+def _drift(img: np.ndarray, t: int) -> np.ndarray:
+    return np.roll(img, t // 3, axis=1)  # slow camera drift
+
+
+def test_wipe_transition_is_a_boundary(tmp_path):
+    a = _photo_like(W, H, 21)
+    b = np.clip(_photo_like(W, H, 22).astype(np.int16) + 50, 0, 255).astype(np.uint8)  # another shot, another tone
+    frames = [_drift(a, t) for t in range(60)]
+    for k in range(1, 13):  # 0.4 s wipe from the left
+        f = _drift(a, 60 + k).copy()
+        x = int(W * k / 12)
+        f[:, :x] = _drift(b, k)[:, :x]
+        frames.append(f)
+    frames += [_drift(b, t) for t in range(13, 73)]
+    p = str(_write(frames, tmp_path / "wipe.mp4"))
+    shots = detect_shots(build_track(p, video_info(p)))
+    assert len(shots) == 2 and shots[1].transition_in == "wipe" and 62 <= shots[1].start_frame <= 70
+
+
+def test_pan_across_one_picture_is_not_a_wipe(tmp_path):
+    a = _photo_like(W * 3, H, 23)
+    frames = [a[:, 6 * t:6 * t + W] for t in range(110)]  # one long pan: the view keeps changing, no new shot
+    p = str(_write(frames, tmp_path / "pan.mp4"))
+    assert len(detect_shots(build_track(p, video_info(p)))) == 1
+
+
+def test_low_frame_rate_cuts_one_frame_apart(tmp_path):
+    a, b, c = (_photo_like(W, H, s) for s in (31, 32, 33))
+    p = str(_write([a] * 20 + [b] + [c] * 20, tmp_path / "lowfps.mp4", fps=10))
+    assert detect_shots(build_track(p, video_info(p)))  # 10 fps: a one-frame shot between two cuts does not crash

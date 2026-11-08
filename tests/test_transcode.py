@@ -123,3 +123,14 @@ def test_transcoded_native30_shot_counts_as_phone_footage():
     probs, _, facts = deterministic(f, provenance=PROV_DOUYIN, fps=30.0, ctx=ctx)
     assert facts["transcode_degraded"] and facts["native_cadence"]
     assert probs["live_action"] > probs["ai_video"]
+
+
+def test_clean_picture_alone_is_not_enough_for_ai_without_an_image_reader():
+    from rea_video.pipeline import _ai_or_live_doubt
+
+    clean = {"pulldown": None, "transcode_degraded": False}
+    # 30 fps download whose platform tags are gone: only "little noise" says AI
+    assert _ai_or_live_doubt("ai_video", clean, {}, {"fps": 30.0}, seen=False)
+    assert _ai_or_live_doubt("ai_video", clean, {}, {"fps": 30.0}, seen=True) is None          # an image reader looked
+    assert _ai_or_live_doubt("ai_video", clean, {}, {"fps": 24.0}, seen=False) is None         # native 24 fps: generator rate
+    assert _ai_or_live_doubt("ai_video", clean, {"hints": {"generator": ["Kling"]}}, {"fps": 30.0}, seen=False) is None

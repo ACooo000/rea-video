@@ -1,4 +1,4 @@
-"""Shot boundary detection: hard cuts, fades through black/white, dissolves.
+"""Shot boundary detection: hard cuts, fades through black/white, dissolves, wipes.
 
 Works on tiny thumbnails of every frame (cheap) and combines a colour-histogram
 distance with a pixel difference so lighting flicker and fast motion do not fire
@@ -203,6 +203,12 @@ def detect_shots(track: FrameTrack, min_shot_s: float = 0.35, cut_threshold: flo
                 if all(abs(i - bnd) > 2 * k for bnd in boundaries):
                     boundaries[i] = ("dissolve", round(1 - resid, 3))
 
+    # 4) wipes and other editor transitions (wipe / radial / clock / pixelate ...): the new shot replaces the old one
+    #    region by region, so every in-between frame is old picture in some places and new picture in the others
+    if dissolve and n > 2 * fps:
+        for i, strength in _wipes(track, score, cut_threshold, boundaries):
+            boundaries[i] = ("wipe", strength)
+
     beat_marks = [b for b, _ in _mg_beats(track, boundaries, fps)]
 
     # assemble shots, enforce minimum length. Boundaries closer than that are one transition (a flash, a
@@ -216,7 +222,7 @@ def detect_shots(track: FrameTrack, min_shot_s: float = 0.35, cut_threshold: flo
         prev = kept[-1] if kept else 0
         gap = b - prev
         if gap >= min_len or (gap >= short_len and _clean_cut(boundaries, b) and (not kept or _clean_cut(boundaries, prev))
-                              and float(track.changed[prev + 1:b].max()) < 0.3):  # a held insert, not transition frames
+                              and float(track.changed[prev + 1:b].max(initial=0.0)) < 0.3):  # a held insert, not transition frames
             kept.append(b)
         elif kept and boundaries[b][1] > boundaries[prev][1] and b - (kept[-2] if len(kept) > 1 else 0) >= short_len:
             kept[-1] = b
@@ -353,6 +359,93 @@ def _mg_beats(track: FrameTrack, boundaries: dict[int, tuple[str, float]], fps: 
             # boundary at the start of the transition (end of hold A)
             out.append((a1, ("mg_transition", frac)))
     return out
+
+
+WIPE_GRID = (6, 8)  # blocks across, down (thumbs are portrait or landscape; the grid only needs to be coarse)
+WIPE_SECONDS = (0.3, 0.6, 1.0, 1.6)
+
+
+WIPE_MIN_TEXTURE = 4.0
+
+
+def _texture(g: np.ndarray) -> float:
+    """Mean absolute Laplacian of a gray thumb: photographic frames have detail everywhere, gradients do not."""
+    return float(np.abs(cv2.Laplacian(g.astype(np.float32), cv2.CV_32F)).mean())
+
+
+def _block_diff(a: np.ndarray, b: np.ndarray, shift: int = 2) -> np.ndarray:
+    """Per-block mean |a - b|, taking the best of a few small shifts so that ordinary motion in the
+    shot does not count as a different picture."""
+    a = a.astype(np.float32)
+    b = b.astype(np.float32)
+    h, w = a.shape
+    best = None
+    for dx, dy in ((0, 0), (shift, 0), (-shift, 0), (0, shift), (0, -shift)):
+        bs = np.roll(b, (dy, dx), axis=(0, 1))
+        d = cv2.resize(np.abs(a - bs)[shift:h - shift, shift:w - shift], WIPE_GRID, interpolation=cv2.INTER_AREA)
+        best = d if best is None else np.minimum(best, d)
+    return best
+
+
+def _wipes(track: FrameTrack, score: np.ndarray, cut_threshold: float,
+           boundaries: dict[int, tuple[str, float]]) -> list[tuple[int, float]]:
+    """Gradual transitions where the new shot takes over the frame region by region. For a window [s, e]
+    whose two ends are different pictures, each block of the frames inside matches one end or the other
+    or sits between them (camera / subject motion inside one shot gives blocks that match neither), and the share of blocks
+    already showing the new picture grows from ~0 to ~1 across the window."""
+    n, fps, thumbs = track.n, track.fps, track.thumbs
+    tiny = [cv2.resize(t, WIPE_GRID, interpolation=cv2.INTER_AREA).astype(np.float32) for t in thumbs]
+    taken = sorted(boundaries)
+    found: list[tuple[int, float]] = []
+    for sec in WIPE_SECONDS:
+        L = max(6, int(round(sec * fps)))
+        for s in range(0, n - L, max(1, L // 6)):
+            e = s + L
+            if any(s - L // 2 <= b <= e + L // 2 for b in taken) or any(abs(s + L // 2 - i) <= L for i, _ in found):
+                continue
+            if float(np.abs(tiny[s] - tiny[e]).mean()) < 14 or float(score[s + 1:e + 1].max()) >= cut_threshold:
+                continue  # the two ends look alike at a glance, or a hard cut sits inside (handled above)
+            dab = _block_diff(thumbs[s], thumbs[e])
+            sig = dab > max(12.0, 0.5 * float(np.median(dab)))
+            if sig.mean() < 0.75:
+                continue  # most of the frame must change: someone walking into the foreground changes only part of it
+            if min(_texture(thumbs[s]), _texture(thumbs[e])) < WIPE_MIN_TEXTURE:
+                continue  # smooth gradients / flat cards: an animated sweep looks the same, leave those to the MG rules
+            us, fits, new = [], [], []
+            for q in (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875):
+                m = thumbs[s + int(round(q * L))]
+                da, db = _block_diff(m, thumbs[s])[sig], _block_diff(m, thumbs[e])[sig]
+                # a block is the old picture, the new one, or (on the moving edge / in a blend) part of each
+                fits.append(float(((np.minimum(da, db) < 0.4 * dab[sig]) | (da + db < 1.2 * dab[sig])).mean()))
+                new.append(db < da)
+                us.append(float(new[-1].mean()))
+            # every in-between frame is old-or-new block by block, the new part grows, and it is not the same
+            # mixture throughout (a static split screen / picture-in-picture is that, not a transition)
+            if min(fits[1:-1]) < 0.75 or not (us[1] < us[3] < us[5]) or us[1] > 0.45 or us[5] < 0.55 or us[5] - us[1] < 0.35:
+                continue
+            # a block turns into the new picture once and stays (a moving head flips blocks back and forth)
+            flips = np.diff(np.array(new, np.int8), axis=0)
+            if float((flips < 0).any(axis=0).mean()) > 0.15:
+                continue
+            # the two ends differ much more than the picture changes in as long a stretch just before / after
+            # (one shot with large motion changes as much outside the window as across it)
+            prev_b = max([b for b in taken if b <= s] + [0])
+            next_b = min([b for b in taken if b >= e] + [n - 1])
+            around = [float(_block_diff(thumbs[a], thumbs[b])[sig].mean()) * L / (b - a)
+                      for a, b in ((max(prev_b, s - L), s), (e, min(next_b, e + L))) if b - a >= max(3, L // 3)]
+            if around and float(dab[sig].mean()) < 2.0 * max(around):
+                continue
+            if _motion_explains(thumbs[s].astype(np.float32), thumbs[e].astype(np.float32)):
+                continue
+            # boundary: the frame where most of the picture has become the new shot
+            mid = s + L // 2
+            for j in range(s + 1, e):
+                db_, da_ = _block_diff(thumbs[j], thumbs[e])[sig], _block_diff(thumbs[j], thumbs[s])[sig]
+                if float((db_ < da_).mean()) >= 0.5:
+                    mid = j
+                    break
+            found.append((mid, round(min(fits), 3)))
+    return found
 
 
 def _steady_morph(thumbs: list[np.ndarray], i: int, k: int) -> bool:

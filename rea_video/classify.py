@@ -148,7 +148,7 @@ def lowlight_photo(f: dict, faces: float = 0.0) -> bool:
             and f.get("dark_flat", 1.0) < r["dark_flat_max"] and f.get("flat_lit", 1.0) < r["flat_lit_max"] and faces >= r["faces"])
 
 
-PLATFORM_TRANSCODES = ("WeChat transcode", "WeChat Channels", "Douyin/TikTok", "Douyin", "Kuaishou", "Xiaohongshu")
+PLATFORM_TRANSCODES = ("WeChat transcode", "WeChat Channels", "Douyin/TikTok", "Douyin", "Kuaishou", "Xiaohongshu", "YouTube")
 
 
 def video_context(shots: list[dict], provenance: dict | None, fps: float | None) -> dict:
@@ -173,7 +173,7 @@ def video_context(shots: list[dict], provenance: dict | None, fps: float | None)
     film_dur = sum(float(r.get("duration", 0)) for r in shots
                    if (r.get("features") or {}).get("palette95", 0) >= 100 and film_hints(r.get("features") or {}, fps, None))
     total = sum(float(r.get("duration", 0)) for r in shots) or 1.0
-    return {"transcoded": bool(plat), "platform": plat, "native30": native30,
+    return {"transcoded": bool(plat), "platform": plat, "native30": native30, "fps": fps,
             "native30_share": round(native_dur / photo_dur, 3) if photo_dur else None,
             "film_hint_share": round(film_dur / total, 3)}
 

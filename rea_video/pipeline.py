@@ -328,6 +328,16 @@ def _ai_or_live_doubt(label: str, facts: dict, prov: dict, vctx: dict, seen_live
                      "AI or live action, to confirm: only a sharpness rhythm and no duplicate frames (re-encodes leave it too), the image reader calls it live action, and there is no AIGC label")
         return T("AI 还是实拍待确认：只有清晰度节奏、没有重复帧（重新压缩也会留下）、没有 AIGC 标识，需要看图确认",
                  "AI or live action, to confirm: only a sharpness rhythm, no duplicate frames (re-encodes leave it too) and no AIGC label, needs an image reader")
+    fps = vctx.get("fps") or 0
+    if (label == "ai_video" and not seen and not facts.get("pulldown") and not facts.get("transcode_degraded")
+            and not (prov.get("hints") or {}).get("generator") and not 23.5 <= fps <= 25.5):
+        # a 30/60 fps file with no frame-rate marks and no label (a native 24/25 fps file is itself a generator's rate):
+        # the AI call rests on the picture being clean (little sensor noise). Platform
+        # re-encodes (X, YouTube, Bilibili ... downloads, and any file whose platform tags were stripped) wipe the noise too
+        return T("AI 还是实拍待确认：没有 24fps 源的重复帧、没有 AIGC 或生成工具标识，判 AI 主要靠画面干净、传感器噪声少；"
+                 "从平台下载、重新压缩过的实拍也会这样，需要看图确认",
+                 "AI or live action, to confirm: no 24fps-source duplicate frames and no AIGC / generator label, so the AI call rests on a clean "
+                 "picture with little sensor noise; live footage downloaded from a platform or re-compressed looks the same, needs an image reader")
     if not facts.get("transcode_degraded"):
         return None
     if label == "live_action" and not facts.get("pulldown"):
